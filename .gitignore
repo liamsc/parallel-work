@@ -1,0 +1,4 @@
+pwork.conf
+.DS_Store
+tests/tmp/
+.test_stderr
