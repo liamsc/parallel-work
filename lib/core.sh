@@ -1,5 +1,11 @@
 #!/usr/bin/env bash
-# Workspace internals: root detection, config loading, clone discovery.
+# Workspace internals: root detection, config loading, clone discovery, version info.
+
+# Read the installed version from the VERSION file.
+_pwork_version() {
+  # 2>/dev/null suppresses error if the file is missing
+  cat "$PWORK_INSTALL_DIR/VERSION" 2>/dev/null || echo "unknown"
+}
 
 # Walk up from $PWD to find the nearest .parallel-work/pwork.conf marker.
 _pwork_root() {
