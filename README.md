@@ -260,6 +260,31 @@ Each workspace has its own config at `<workspace>/.parallel-work/pwork.conf`. Th
 **How do I remove a workspace?**
 Delete the workspace directory. The shell helpers will simply not detect it when you're not inside it.
 
+## Updating
+
+If you already have `p-update` (v0.1.0+):
+
+```bash
+p-update
+```
+
+If you installed before `p-update` existed, update manually once:
+
+```bash
+cd ~/.parallel-work   # or wherever you cloned parallel-work
+git pull
+./install.sh
+source ~/.zshrc
+```
+
+After that, `p-update` will be available for future upgrades.
+
+Check your installed version at any time:
+
+```bash
+p-version
+```
+
 ## Troubleshooting
 
 **`git clone` fails with "Permission denied (publickey)"**

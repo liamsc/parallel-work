@@ -4,11 +4,13 @@ Shell toolkit for running N Claude Code sessions in parallel against independent
 
 ## Architecture
 
+The `VERSION` file at the repo root is the single source of truth for the current release (semver, e.g. `0.1.0`). GitHub tags use `v` prefix (`v0.1.0`).
+
 All code lives in `lib/`:
 
 | File | Purpose |
 |------|---------|
-| `core.sh` | Workspace root detection (`_pwork_root`), config loading (`_pwork_conf`), clone discovery (`_pwork_clones`), global registry helpers (`_pwork_register`, `_pwork_list_workspaces`) |
+| `core.sh` | Workspace root detection (`_pwork_root`), config loading (`_pwork_conf`), clone discovery (`_pwork_clones`), version info (`_pwork_version`), global registry helpers (`_pwork_register`, `_pwork_list_workspaces`) |
 | `commands.sh` | Loader that sources all files in `commands/` |
 | `commands/init.sh` | `p-init` — set up a new workspace from a repo URL |
 | `commands/cd.sh` | `p1`–`p20` — quick-cd into a clone |
@@ -18,6 +20,8 @@ All code lives in `lib/`:
 | `commands/branches.sh` | `p-branches` — quick branch + PR/merge status per clone |
 | `commands/new.sh` | `p-new` — create the next pN clone |
 | `commands/clean.sh` | `p-clean` — recycle clones whose PR has been merged |
+| `commands/update.sh` | `p-update` — update parallel-work to the latest version |
+| `commands/version.sh` | `p-version` — show installed version and git SHA |
 | `commands/list.sh` | `plist` + `yolo` — help listing and alias |
 | `clone-setup.sh` | Per-clone setup: symlinks, `CLAUDE.local.md`, git exclude |
 | `bootstrap.sh` | Workspace initialization — creates and configures N clones |
@@ -36,6 +40,8 @@ All code lives in `lib/`:
 | `p-branches` | Quick branch + PR/merge status per clone |
 | `p-new` | Create the next pN clone |
 | `p-clean [pN]` | Recycle clones whose PR has been merged |
+| `p-update` | Update parallel-work to the latest version |
+| `p-version` | Show installed version and git SHA |
 | `plist` | List all commands |
 
 ## Testing

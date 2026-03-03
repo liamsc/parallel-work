@@ -69,8 +69,9 @@ pw() {
   printf "%-4s  %-20s  %-8s  %s\n" "----" "--------------------" "--------" "----"
   local i=0 ws_name clone_count
   for ws in "${paths[@]}"; do
-    # (( )) is arithmetic context; ++ increments by one
-    (( i++ ))
+    # (( )) is arithmetic context; i += 1 avoids the exit-code-1 gotcha
+    # of (( i++ )) when i=0 (post-increment evaluates to 0 → false).
+    (( i += 1 ))
     # 2>/dev/null suppresses stderr
     ws_name=$(cd "$ws" && source .parallel-work/pwork.conf 2>/dev/null && basename "${PWORK_REPO_SLUG:-$ws}")
     # wc -l counts lines; tr -d ' ' strips whitespace padding from wc output
