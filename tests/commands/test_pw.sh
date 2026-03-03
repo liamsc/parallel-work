@@ -392,6 +392,9 @@ test_pw_shows_distinct_names_for_two_workspaces() {
 }
 
 test_pw_listing_survives_errexit() {
+  # command -v checks if zsh is available; skip on systems without it (e.g. Ubuntu CI)
+  if ! command -v zsh &>/dev/null; then return 0; fi
+
   setup_test_workspace
   create_workspace 2
   _PWORK_REGISTRY="$TEST_TMPDIR/workspaces"
@@ -423,6 +426,9 @@ test_pw_listing_survives_errexit() {
 }
 
 test_pw_n_jump_survives_errexit() {
+  # command -v checks if zsh is available; skip on systems without it (e.g. Ubuntu CI)
+  if ! command -v zsh &>/dev/null; then return 0; fi
+
   setup_test_workspace
   create_workspace 2
   _PWORK_REGISTRY="$TEST_TMPDIR/workspaces"
