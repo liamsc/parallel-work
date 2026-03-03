@@ -4,8 +4,13 @@ alias yolo="claude --dangerously-skip-permissions"
 
 # plist: list all available commands.
 plist() {
-  echo "parallel-work commands"
-  echo "======================"
+  local ver header
+  ver="$(_pwork_version)"
+  header="parallel-work ${ver} commands"
+  echo "$header"
+  # ${#var} gives the string length; printf repeats '=' that many times
+  printf '%0.s=' $(seq 1 ${#header})
+  echo ""
   echo ""
   echo "  p-init URL [PATH]    Set up a new workspace from a repo URL"
   echo "    example:  p-init git@github.com:org/repo.git"
@@ -36,6 +41,12 @@ plist() {
   echo "    example:  p-clean           (all clones)"
   echo "    example:  p-clean p2        (just p2)"
   echo "    flags:    --dry-run"
+  echo ""
+  echo "  p-update             Update parallel-work to the latest version"
+  echo "    example:  p-update"
+  echo ""
+  echo "  p-version            Show installed version and git SHA"
+  echo "    example:  p-version"
   echo ""
   echo "  yolo                 Run claude --dangerously-skip-permissions"
   echo "    example:  yolo"
