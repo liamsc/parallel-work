@@ -40,10 +40,29 @@ EOF
     echo "    Created CLAUDE.local.md"
   fi
 
-  # Add CLAUDE.local.md to git's local exclude
+  # Create .claude/settings.json with statusline pointing to our script.
+  local settings="$dir/.claude/settings.json"
+  if [[ ! -f "$settings" ]]; then
+    local sl_path="$PWORK_INSTALL_DIR/lib/statusline.sh"
+    cat > "$settings" <<EOF
+{
+  "statusLine": {
+    "type": "command",
+    "command": "$sl_path"
+  }
+}
+EOF
+    echo "    Created .claude/settings.json (statusline)"
+  fi
+
+  # Add .claude/*.json and CLAUDE.local.md to git's local exclude.
   local exclude="$dir/.git/info/exclude"
   if ! grep -q 'CLAUDE.local.md' "$exclude" 2>/dev/null; then
     echo '.claude/CLAUDE.local.md' >> "$exclude"
     echo "    Added CLAUDE.local.md to git exclude"
+  fi
+  if ! grep -q '\.claude/settings\.json' "$exclude" 2>/dev/null; then
+    echo '.claude/settings.json' >> "$exclude"
+    echo "    Added .claude/settings.json to git exclude"
   fi
 }

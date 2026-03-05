@@ -23,7 +23,8 @@ All code lives in `lib/`:
 | `commands/update.sh` | `p-update` — update parallel-work to the latest version |
 | `commands/version.sh` | `p-version` — show installed version and git SHA |
 | `commands/list.sh` | `plist` + `yolo` — help listing and alias |
-| `clone-setup.sh` | Per-clone setup: symlinks, `CLAUDE.local.md`, git exclude |
+| `statusline.sh` | Claude Code statusline script — shows clone name, repo, branch, git state, context %, and current task |
+| `clone-setup.sh` | Per-clone setup: symlinks, `CLAUDE.local.md`, statusline settings, git exclude |
 | `bootstrap.sh` | Workspace initialization — creates and configures N clones |
 | `gh.sh` | GitHub CLI helpers: `_pwork_check_gh`, `_pwork_fetch_pr_branches`, `_pwork_branch_status` |
 | `shell-helpers.sh` | Entry point sourced from `.zshrc` — loads all other lib files, provides `p1`–`pN` functions |
