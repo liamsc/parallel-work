@@ -7,6 +7,13 @@
 #
 # Designed to be installed per-clone via .claude/settings.json.
 
+# -u treats unset variables as errors; pipefail catches failures in pipes.
+set -uo pipefail
+
+# Bail out silently if jq isn't installed — statusline is non-critical.
+# command -v checks if a command exists without running it.
+command -v jq &>/dev/null || exit 0
+
 # Read all of stdin (JSON from Claude Code) into a variable.
 input=$(cat)
 
@@ -24,6 +31,7 @@ RST='\033[0m'
 
 # ── Derive clone name (e.g. "p3") by walking up from cwd ───
 CLONE=""
+WORKSPACE_DIR=""
 d="$DIR"
 # Walk up directory tree until we find a pN directory name.
 while [[ "$d" != "/" ]]; do
