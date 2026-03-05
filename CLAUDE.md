@@ -19,6 +19,7 @@ All code lives in `lib/`:
 | `commands/status.sh` | `p-status` — branch, commit, dirty/clean, and PR status |
 | `commands/branches.sh` | `p-branches` — quick branch + PR/merge status per clone |
 | `commands/new.sh` | `p-new` — create the next pN clone |
+| `commands/setup.sh` | `p-setup` — apply statusline + clone config to existing clones |
 | `commands/clean.sh` | `p-clean` — recycle clones whose PR has been merged |
 | `commands/update.sh` | `p-update` — update parallel-work to the latest version |
 | `commands/version.sh` | `p-version` — show installed version and git SHA |
@@ -40,6 +41,7 @@ All code lives in `lib/`:
 | `p-status` | Branch, commit, dirty/clean, and PR status table |
 | `p-branches` | Quick branch + PR/merge status per clone |
 | `p-new` | Create the next pN clone |
+| `p-setup` | Apply statusline + clone config to all existing clones |
 | `p-clean [pN]` | Recycle clones whose PR has been merged |
 | `p-update` | Update parallel-work to the latest version |
 | `p-version` | Show installed version and git SHA |
