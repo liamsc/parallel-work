@@ -50,8 +50,10 @@ p-clean() {
   local clones_to_check
   clones_to_check="${target:-$(_pwork_clones)}"
 
-  # Unquoted $clones_to_check lets word-splitting iterate over each clone name
-  for clone in $clones_to_check; do
+  local clone
+  # IFS= read -r: read one clone name per line without trimming or backslash processing
+  while IFS= read -r clone; do
+    [[ -n "$clone" ]] || continue
     # 2>/dev/null suppresses stderr (e.g., git errors in detached HEAD state)
     branch=$(cd "$root/$clone" && git branch --show-current 2>/dev/null)
     if [[ "$branch" == "$default_branch" ]]; then
@@ -70,7 +72,8 @@ p-clean() {
       # (( … )) is arithmetic context; ++ increments by one
       (( recycled++ ))
     fi
-  done
+  # <<< feeds a string as stdin to the while-read loop (here-string)
+  done <<< "$clones_to_check"
 
   # -eq is numeric equality (vs == which is string comparison)
   if [[ $recycled -eq 0 ]]; then

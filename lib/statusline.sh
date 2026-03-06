@@ -22,10 +22,12 @@ DIR=$(echo "$input" | jq -r '.workspace.current_dir')
 PCT=$(echo "$input" | jq -r '.context_window.used_percentage // 0' | cut -d. -f1)
 
 # ── ANSI color codes ────────────────────────────────────────
-CYN='\033[36m'
-GRN='\033[32m'
-YLW='\033[33m'
-RED='\033[31m'
+BLD='\033[1m'
+CYN='\033[1;36m'
+GRN='\033[1;32m'
+YLW='\033[1;33m'
+RED='\033[1;31m'
+MAG='\033[1;35m'
 DIM='\033[2m'
 RST='\033[0m'
 
@@ -59,28 +61,39 @@ BRANCH=$(git -C "$DIR" branch --show-current 2>/dev/null)
 STAGED=$(git -C "$DIR" diff --cached --numstat 2>/dev/null | wc -l | tr -d ' ')
 MODIFIED=$(git -C "$DIR" diff --numstat 2>/dev/null | wc -l | tr -d ' ')
 
-# ── Line 1: clone | repo | branch | git state | context ───
-LINE="${CYN}${CLONE:-?}${RST}"
+# ── Build content segments separated by │ ─────────────────
+SEP=" ${BOX_COLOR}│${RST} "
+CONTENT="${BLD}clone:${RST}${CYN}${CLONE:-?}${RST}"
 # -n tests if the string is non-empty.
-[[ -n "$SLUG" ]] && LINE="$LINE ${DIM}|${RST} $SLUG"
-[[ -n "$BRANCH" ]] && LINE="$LINE ${DIM}|${RST} $BRANCH"
-# -gt 0 means "greater than zero"
-[[ "$STAGED" -gt 0 ]] && LINE="$LINE ${GRN}+${STAGED}${RST}"
-[[ "$MODIFIED" -gt 0 ]] && LINE="$LINE ${YLW}~${MODIFIED}${RST}"
+[[ -n "$SLUG" ]] && CONTENT="${CONTENT}${SEP}${BLD}repo:${RST}${MAG}$SLUG${RST}"
+
+# Branch + dirty state grouped together.
+if [[ -n "$BRANCH" ]]; then
+  BRANCH_SEG="${BLD}branch:${RST}${GRN}$BRANCH${RST}"
+  # -gt 0 means "greater than zero"
+  [[ "$STAGED" -gt 0 ]] && BRANCH_SEG="$BRANCH_SEG ${GRN}+${STAGED}${RST}"
+  [[ "$MODIFIED" -gt 0 ]] && BRANCH_SEG="$BRANCH_SEG ${YLW}~${MODIFIED}${RST}"
+  CONTENT="${CONTENT}${SEP}${BRANCH_SEG}"
+fi
 
 # Context percentage — color shifts at 60% (yellow warning) and 80% (red).
-CTX_COLOR="$DIM"
+CTX_COLOR="$GRN"
+CTX_WARN=""
+# BOX_COLOR sets the border color — defaults to cyan, shifts to match context urgency.
+BOX_COLOR="$CYN"
 if [[ "$PCT" -ge 80 ]]; then
   CTX_COLOR="$RED"
-elif [[ "$PCT" -ge 60 ]]; then
+  CTX_WARN=" ${RED}!!${RST}"
+  BOX_COLOR="$RED"
+elif [[ "$PCT" -ge 70 ]]; then
   CTX_COLOR="$YLW"
+  CTX_WARN=" ${YLW}!${RST}"
+  BOX_COLOR="$YLW"
 fi
-LINE="$LINE ${DIM}|${RST} ${CTX_COLOR}${PCT}% ctx${RST}"
+CONTENT="${CONTENT}${SEP}${BLD}ctx:${RST}${CTX_COLOR}${PCT}%${RST}${CTX_WARN}"
 
-# -e enables interpretation of escape sequences (ANSI colors).
-echo -e "$LINE"
-
-# ── Line 2: current task from CLAUDE.local.md (if set) ─────
+# ── Task line (appended inside the box if set) ────────────
+TASK_LINE=""
 TASK_FILE="$DIR/.claude/CLAUDE.local.md"
 if [[ -f "$TASK_FILE" ]]; then
   # Extract first non-empty line between "## Current Task" and the next "##" heading.
@@ -88,6 +101,35 @@ if [[ -f "$TASK_FILE" ]]; then
   TASK=$(sed -n '/^## Current Task$/,/^##/{/^## Current Task$/d;/^##/d;p;}' "$TASK_FILE" \
     | head -1 | xargs)
   if [[ -n "$TASK" && "$TASK" != "_unassigned_" ]]; then
-    echo -e "${DIM}Task: ${TASK}${RST}"
+    TASK_LINE="${BLD}task:${RST}${DIM}${TASK}${RST}"
   fi
 fi
+
+# ── Render boxed output ───────────────────────────────────
+# Strip ANSI codes to measure visible character width for the box border.
+# sed removes all escape sequences (\033[...m); wc -m counts chars.
+strip_ansi() { echo -e "$1" | sed $'s/\033\\[[0-9;]*m//g'; }
+CONTENT_PLAIN=$(strip_ansi "$CONTENT")
+TASK_PLAIN=$(strip_ansi "$TASK_LINE")
+
+# ${#var} gives the string length; pick the longer line for box width.
+CONTENT_LEN=${#CONTENT_PLAIN}
+TASK_LEN=${#TASK_PLAIN}
+# (( )) is arithmetic context
+(( BOX_W = CONTENT_LEN > TASK_LEN ? CONTENT_LEN : TASK_LEN ))
+# Add 2 for padding (one space each side).
+(( BOX_W += 2 ))
+
+# printf '%0.s─' repeats ─ for each number in the sequence, creating a horizontal rule.
+HBAR=$(printf '%0.s─' $(seq 1 "$BOX_W"))
+
+# Pad each line to fill the box width with trailing spaces.
+# $(( BOX_W - len - 2 )) calculates how many spaces to add after the content.
+PAD1=$(printf '%*s' "$(( BOX_W - CONTENT_LEN - 2 ))" "")
+echo -e "${BOX_COLOR}┌${HBAR}┐${RST}"
+echo -e "${BOX_COLOR}│${RST} ${CONTENT}${PAD1} ${BOX_COLOR}│${RST}"
+if [[ -n "$TASK_LINE" ]]; then
+  PAD2=$(printf '%*s' "$(( BOX_W - TASK_LEN - 2 ))" "")
+  echo -e "${BOX_COLOR}│${RST} ${TASK_LINE}${PAD2} ${BOX_COLOR}│${RST}"
+fi
+echo -e "${BOX_COLOR}└${HBAR}┘${RST}"

@@ -11,7 +11,9 @@ p-sync() {
   # mktemp creates a temporary file with a unique name and returns its path
   fail_file="$(mktemp)"
 
-  for clone in $(_pwork_clones); do
+  # IFS= read -r: read one clone name per line without trimming or backslash processing
+  while IFS= read -r clone; do
+    [[ -n "$clone" ]] || continue
     # ( … ) runs commands in a subshell so the cd doesn't change our working directory
     (
       cd "$root/$clone" &&
@@ -25,7 +27,7 @@ p-sync() {
       echo "[$clone] done"
     # || — if the subshell fails, log the clone name; & backgrounds the whole thing
     ) || echo "$clone" >> "$fail_file" &
-  done
+  done < <(_pwork_clones)
   # wait pauses until all backgrounded (&) jobs finish
   wait
 

@@ -20,11 +20,13 @@ p-branches() {
   printf "%-6s  %-25s  %s\n" "Clone" "Branch" "Status"
   printf "%-6s  %-25s  %s\n" "------" "-------------------------" "--------------------"
   local branch pr_status
-  for clone in $(_pwork_clones); do
+  # IFS= read -r: read one clone name per line without trimming or backslash processing
+  while IFS= read -r clone; do
+    [[ -n "$clone" ]] || continue
     # 2>/dev/null suppresses stderr; || echo "(unknown)" provides a fallback if git fails
     branch=$(cd "$root/$clone" && git branch --show-current 2>/dev/null || echo "(unknown)")
     # ${VAR:-default} expands to default if VAR is unset or empty
     pr_status="$(_pwork_branch_status "$branch" "${PWORK_DEFAULT_BRANCH:-main}" "$merged_branches" "$open_branches")"
     printf "%-6s  %-25s  %s\n" "$clone" "$branch" "$pr_status"
-  done
+  done < <(_pwork_clones)
 }

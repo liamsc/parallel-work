@@ -3,29 +3,27 @@
 # Useful for adopting parallel-work in a workspace that already has clones,
 # or re-applying setup after upgrading.
 
-source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../clone-setup.sh"
-
 p-setup() {
   local root
   root="$(_pwork_root)" || return 1
   source "$root/.parallel-work/pwork.conf"
 
-  local clones
-  # _pwork_clones lists pN directories in numeric order
-  clones=$(_pwork_clones)
-  # -z tests if the string is empty
-  if [[ -z "$clones" ]]; then
-    echo "No clones found in $root" >&2
-    return 1
-  fi
-
   local clone dir count=0
-  for clone in $clones; do
+  # IFS= prevents trimming whitespace; read -r prevents backslash interpretation
+  # < <(cmd) is process substitution: feeds cmd's output as if it were a file
+  while IFS= read -r clone; do
+    # -n tests that a string is non-empty
+    [[ -n "$clone" ]] || continue
     dir="$root/$clone"
     echo "Setting up $clone ..."
     _pwork_setup_clone "$clone" "$dir" "$root"
     (( count++ ))
-  done
+  done < <(_pwork_clones)
+
+  if [[ $count -eq 0 ]]; then
+    echo "No clones found in $root" >&2
+    return 1
+  fi
 
   echo ""
   echo "Done — configured $count clone(s)."
