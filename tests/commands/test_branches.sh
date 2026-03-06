@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Tests for p-branches command.
 
+# Description: p-branches lists every clone in the workspace.
 test_p_branches_shows_all_clones() {
   setup_test_workspace
   create_workspace 3
@@ -15,6 +16,7 @@ test_p_branches_shows_all_clones() {
   teardown_test_workspace
 }
 
+# Description: p-branches displays the current branch name for each clone.
 test_p_branches_shows_branch_names() {
   setup_test_workspace
   create_workspace 3
@@ -30,6 +32,7 @@ test_p_branches_shows_branch_names() {
   teardown_test_workspace
 }
 
+# Description: p-branches shows "available for new work" for clones on the default branch.
 test_p_branches_default_branch_status() {
   setup_test_workspace
   create_workspace 3
@@ -42,6 +45,7 @@ test_p_branches_default_branch_status() {
   teardown_test_workspace
 }
 
+# Description: p-branches shows "no PR" for feature branches without a pull request.
 test_p_branches_no_pr_status() {
   setup_test_workspace
   create_workspace 3

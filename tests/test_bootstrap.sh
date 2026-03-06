@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Tests for bootstrap_workspace and clone failure handling.
 
+# Description: bootstrap_workspace creates the expected number of pN directories.
 test_bootstrap_creates_clones() {
   setup_test_workspace
   create_workspace 3
@@ -11,6 +12,7 @@ test_bootstrap_creates_clones() {
   teardown_test_workspace
 }
 
+# Description: each bootstrapped clone is a valid git repository.
 test_bootstrap_clones_are_git_repos() {
   setup_test_workspace
   create_workspace 2
@@ -21,6 +23,7 @@ test_bootstrap_clones_are_git_repos() {
   teardown_test_workspace
 }
 
+# Description: bootstrap creates CLAUDE.local.md with the correct clone name.
 test_bootstrap_creates_claude_local_md() {
   setup_test_workspace
   create_workspace 2
@@ -35,6 +38,7 @@ test_bootstrap_creates_claude_local_md() {
   teardown_test_workspace
 }
 
+# Description: bootstrap adds CLAUDE.local.md to git's local exclude file.
 test_bootstrap_adds_git_exclude() {
   setup_test_workspace
   create_workspace 2
@@ -46,6 +50,7 @@ test_bootstrap_adds_git_exclude() {
   teardown_test_workspace
 }
 
+# Description: re-running bootstrap does not overwrite existing clone directories.
 test_bootstrap_skips_existing() {
   setup_test_workspace
   create_workspace 2
@@ -66,6 +71,7 @@ test_bootstrap_skips_existing() {
   teardown_test_workspace
 }
 
+# Description: bootstrap prints [N/total] progress counters during cloning.
 test_bootstrap_progress_counters() {
   setup_test_workspace
   mkdir -p "$TEST_WORKSPACE/.parallel-work"
@@ -91,6 +97,7 @@ EOF
   teardown_test_workspace
 }
 
+# Description: bootstrap fails and reports an error when git clone fails (bad URL).
 test_clone_failure_caught_in_bootstrap() {
   setup_test_workspace
   mkdir -p "$TEST_WORKSPACE/.parallel-work"
