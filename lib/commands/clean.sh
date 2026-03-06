@@ -69,8 +69,9 @@ p-clean() {
         (cd "$root/$clone" && git checkout "$default_branch" && git pull)
         echo "  $clone now on $default_branch"
       fi
-      # (( … )) is arithmetic context; ++ increments by one
-      (( recycled++ ))
+      # (( )) is arithmetic context; recycled += 1 avoids the exit-code-1
+      # gotcha of (( recycled++ )) when recycled=0 (post-increment → false).
+      (( recycled += 1 ))
     fi
   # <<< feeds a string as stdin to the while-read loop (here-string)
   done <<< "$clones_to_check"

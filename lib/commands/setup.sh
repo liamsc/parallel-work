@@ -17,7 +17,9 @@ p-setup() {
     dir="$root/$clone"
     echo "Setting up $clone ..."
     _pwork_setup_clone "$clone" "$dir" "$root"
-    (( count++ ))
+    # (( )) is arithmetic context; count += 1 avoids the exit-code-1 gotcha
+    # of (( count++ )) when count=0 (post-increment evaluates to 0 → false).
+    (( count += 1 ))
   done < <(_pwork_clones)
 
   if [[ $count -eq 0 ]]; then

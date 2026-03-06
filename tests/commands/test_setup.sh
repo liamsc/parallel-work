@@ -76,3 +76,39 @@ test_p_setup_fails_outside_workspace() {
 
   teardown_test_workspace
 }
+
+test_p_setup_iterates_clones_under_zsh() {
+  # command -v checks if zsh is available; skip on systems without it (e.g. Ubuntu CI)
+  if ! command -v zsh &>/dev/null; then return 0; fi
+
+  setup_test_workspace
+  create_workspace 3
+
+  # Remove settings.json to verify p-setup recreates them
+  rm -f "$TEST_WORKSPACE"/p{1,2,3}/.claude/settings.json
+
+  # Run p-setup under zsh with errreturn — the old `for clone in $clones`
+  # pattern treated the entire newline-separated list as one word in zsh,
+  # creating a single mangled directory instead of iterating each clone.
+  local output status
+  output=$(zsh -c "
+    setopt errreturn
+    export PWORK_INSTALL_DIR='$PWORK_INSTALL_DIR'
+    source '$PWORK_INSTALL_DIR/lib/shell-helpers.sh'
+    cd '$TEST_WORKSPACE/p1'
+    p-setup 2>&1
+  " 2>&1)
+  status=$?
+  assert_status_ok "$status" "p-setup succeeds under zsh errreturn" || { teardown_test_workspace; return 1; }
+  assert_contains "$output" "3 clone(s)" "p-setup iterates all clones under zsh" || { teardown_test_workspace; return 1; }
+
+  # Verify each clone got its own settings.json (not a single mangled path)
+  [[ -f "$TEST_WORKSPACE/p1/.claude/settings.json" ]]
+  assert_status_ok $? "p1 has settings.json after zsh p-setup" || { teardown_test_workspace; return 1; }
+  [[ -f "$TEST_WORKSPACE/p2/.claude/settings.json" ]]
+  assert_status_ok $? "p2 has settings.json after zsh p-setup" || { teardown_test_workspace; return 1; }
+  [[ -f "$TEST_WORKSPACE/p3/.claude/settings.json" ]]
+  assert_status_ok $? "p3 has settings.json after zsh p-setup" || { teardown_test_workspace; return 1; }
+
+  teardown_test_workspace
+}
