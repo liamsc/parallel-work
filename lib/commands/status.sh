@@ -38,6 +38,8 @@ p-status() {
     else
       statuses+=("dirty")
     fi
+  # < <(cmd) is process substitution: the while loop reads each clone name
+  # from _pwork_clones's output, one per line.
   done < <(_pwork_clones)
 
   # ${#array[@]} gives the number of elements in the array

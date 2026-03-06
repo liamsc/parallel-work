@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Tests for statusline setup during clone bootstrap.
 
+# Description: bootstrap creates .claude/settings.json with statusLine config.
 test_bootstrap_creates_statusline_settings() {
   setup_test_workspace
   create_workspace 2
@@ -16,6 +17,7 @@ test_bootstrap_creates_statusline_settings() {
   teardown_test_workspace
 }
 
+# Description: bootstrap adds .claude/settings.json to git's local exclude.
 test_bootstrap_excludes_settings_json() {
   setup_test_workspace
   create_workspace 2
@@ -27,6 +29,7 @@ test_bootstrap_excludes_settings_json() {
   teardown_test_workspace
 }
 
+# Description: re-running clone setup does not overwrite custom settings.json.
 test_statusline_settings_not_overwritten() {
   setup_test_workspace
   create_workspace 2
@@ -45,6 +48,7 @@ test_statusline_settings_not_overwritten() {
   teardown_test_workspace
 }
 
+# Description: statusline.sh has execute permission so Claude Code can run it.
 test_statusline_script_is_executable() {
   # -x tests if the file has execute permission.
   [[ -x "$PWORK_INSTALL_DIR/lib/statusline.sh" ]]

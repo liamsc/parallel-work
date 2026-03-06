@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Tests for plist command.
 
+# Description: plist header includes the version number from VERSION.
 test_plist_header_shows_version() {
   setup_test_workspace
 
@@ -12,6 +13,7 @@ test_plist_header_shows_version() {
   teardown_test_workspace
 }
 
+# Description: plist output includes every available command.
 test_plist_includes_all_commands() {
   setup_test_workspace
 

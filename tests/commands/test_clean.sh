@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Tests for p-clean command.
 
+# Description: p-clean fails with "gh CLI required" when gh is not installed.
 test_p_clean_requires_gh() {
   setup_test_workspace
   create_workspace 2
@@ -30,6 +31,7 @@ test_p_clean_requires_gh() {
   teardown_test_workspace
 }
 
+# Description: p-clean rejects a clone name that doesn't exist (e.g. p99).
 test_p_clean_rejects_invalid_clone() {
   setup_test_workspace
   create_workspace 2
@@ -44,6 +46,7 @@ test_p_clean_rejects_invalid_clone() {
   teardown_test_workspace
 }
 
+# Description: p-clean shows usage message for unrecognized arguments.
 test_p_clean_shows_usage_on_bad_arg() {
   setup_test_workspace
   create_workspace 2
@@ -58,6 +61,7 @@ test_p_clean_shows_usage_on_bad_arg() {
   teardown_test_workspace
 }
 
+# Description: p-clean reports "No clones to recycle" when all clones are on the default branch.
 test_p_clean_skips_default_branch() {
   setup_test_workspace
   create_workspace 2

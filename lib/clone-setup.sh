@@ -55,7 +55,10 @@ EOF
     echo "    Created .claude/settings.json (statusline)"
   fi
 
-  # Add .claude/*.json and CLAUDE.local.md to git's local exclude.
+  # Add pwork-generated files to git's local exclude so they don't pollute
+  # git status. These are full relative paths (not globs), so they only match
+  # exactly .claude/CLAUDE.local.md and .claude/settings.json — no risk of
+  # accidentally ignoring user files.
   local exclude="$dir/.git/info/exclude"
   if ! grep -q 'CLAUDE.local.md' "$exclude" 2>/dev/null; then
     echo '.claude/CLAUDE.local.md' >> "$exclude"

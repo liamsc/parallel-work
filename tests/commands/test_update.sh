@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Tests for p-update command.
 
+# Description: p-update fails when PWORK_INSTALL_DIR is not set.
 test_p_update_fails_when_install_dir_unset() {
   local output
   # Run in a subshell with PWORK_INSTALL_DIR explicitly unset
@@ -11,6 +12,7 @@ test_p_update_fails_when_install_dir_unset() {
   assert_contains "$output" "PWORK_INSTALL_DIR is not set" "p-update error mentions PWORK_INSTALL_DIR"
 }
 
+# Description: p-update fails when PWORK_INSTALL_DIR is not a git repository.
 test_p_update_fails_when_not_a_git_repo() {
   local tmpdir
   tmpdir="$(mktemp -d)"
@@ -25,6 +27,7 @@ test_p_update_fails_when_not_a_git_repo() {
   rm -rf "$tmpdir"
 }
 
+# Description: p-update runs git pull and re-sources shell-helpers successfully.
 test_p_update_pulls_and_reloads() {
   setup_test_workspace
 
@@ -55,6 +58,7 @@ test_p_update_pulls_and_reloads() {
   teardown_test_workspace
 }
 
+# Description: p-update shows "old -> new" version transition when VERSION changes.
 test_p_update_shows_version_transition() {
   setup_test_workspace
 

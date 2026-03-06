@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Tests for install.sh.
 
+# Description: install.sh appends the PWORK_INSTALL_DIR export and source line to .zshrc.
 test_install_adds_source_line() {
   setup_test_workspace
 
@@ -18,6 +19,7 @@ test_install_adds_source_line() {
   teardown_test_workspace
 }
 
+# Description: running install.sh twice only adds the source line once.
 test_install_is_idempotent() {
   setup_test_workspace
 
@@ -35,6 +37,7 @@ test_install_is_idempotent() {
   teardown_test_workspace
 }
 
+# Description: install.sh does not error when git is available.
 test_install_checks_git() {
   setup_test_workspace
 

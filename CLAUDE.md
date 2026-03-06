@@ -57,6 +57,7 @@ All code lives in `lib/`:
 - Helpers: `tests/helpers.sh` — assertions (`assert_eq`, `assert_contains`, `assert_status_fail`, etc.) and workspace fixtures
 - Fixture pattern: `setup_test_workspace` creates a bare origin + tmpdir, `create_workspace N` bootstraps N clones, `teardown_test_workspace` cleans up
 - Tests run in subshells; stdout is suppressed, stderr shown on failure
+- Every test function must have a `# Description:` comment above it explaining what the test verifies
 
 ## Conventions
 

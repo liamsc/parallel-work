@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Tests for p-setup — apply statusline/clone config to existing clones.
 
+# Description: p-setup creates .claude/settings.json on clones that don't have one.
 test_p_setup_creates_settings_json() {
   setup_test_workspace
   create_workspace 2
@@ -20,6 +21,7 @@ test_p_setup_creates_settings_json() {
   teardown_test_workspace
 }
 
+# Description: p-setup creates CLAUDE.local.md with the clone name when missing.
 test_p_setup_creates_claude_local_md() {
   setup_test_workspace
   create_workspace 2
@@ -39,6 +41,7 @@ test_p_setup_creates_claude_local_md() {
   teardown_test_workspace
 }
 
+# Description: p-setup does not overwrite CLAUDE.local.md if it already exists.
 test_p_setup_preserves_existing_files() {
   setup_test_workspace
   create_workspace 1
@@ -55,6 +58,7 @@ test_p_setup_preserves_existing_files() {
   teardown_test_workspace
 }
 
+# Description: p-setup prints the total number of configured clones on completion.
 test_p_setup_shows_clone_count() {
   setup_test_workspace
   create_workspace 3
@@ -67,6 +71,7 @@ test_p_setup_shows_clone_count() {
   teardown_test_workspace
 }
 
+# Description: p-setup fails with a non-zero exit code outside a workspace.
 test_p_setup_fails_outside_workspace() {
   local output status
   output=$(cd /tmp && p-setup 2>&1)
@@ -77,6 +82,8 @@ test_p_setup_fails_outside_workspace() {
   teardown_test_workspace
 }
 
+# Description: p-setup iterates all clones correctly under zsh with errreturn,
+# catching the (( count++ )) exit-code-1 bug when count=0.
 test_p_setup_iterates_clones_under_zsh() {
   # command -v checks if zsh is available; skip on systems without it (e.g. Ubuntu CI)
   if ! command -v zsh &>/dev/null; then return 0; fi
@@ -102,7 +109,9 @@ test_p_setup_iterates_clones_under_zsh() {
   assert_status_ok "$status" "p-setup succeeds under zsh errreturn" || { teardown_test_workspace; return 1; }
   assert_contains "$output" "3 clone(s)" "p-setup iterates all clones under zsh" || { teardown_test_workspace; return 1; }
 
-  # Verify each clone got its own settings.json (not a single mangled path)
+  # Verify each clone got its own settings.json (not a single mangled path).
+  # [[ -f path ]] tests that the file exists; $? is the exit status of the last command.
+  # || { ...; return 1; } — if the assertion fails, clean up and bail out early.
   [[ -f "$TEST_WORKSPACE/p1/.claude/settings.json" ]]
   assert_status_ok $? "p1 has settings.json after zsh p-setup" || { teardown_test_workspace; return 1; }
   [[ -f "$TEST_WORKSPACE/p2/.claude/settings.json" ]]
