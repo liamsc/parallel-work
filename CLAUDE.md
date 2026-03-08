@@ -59,6 +59,32 @@ All code lives in `lib/`:
 - Tests run in subshells; stdout is suppressed, stderr shown on failure
 - Every test function must have a `# Description:` comment above it explaining what the test verifies
 
+## Manual testing
+
+To test `_pwork_setup_clone` without creating a full workspace:
+
+```bash
+# Create a fake clone with a git repo
+mkdir -p /tmp/test-clone/.claude /tmp/test-clone/.git/info
+touch /tmp/test-clone/.git/info/exclude
+
+# Source the setup code
+source lib/clone-setup.sh
+
+# Run it (needs PWORK_INSTALL_DIR and PWORK_SHARED_FILES)
+export PWORK_INSTALL_DIR="$PWD"
+PWORK_SHARED_FILES=()
+_pwork_setup_clone "p1" "/tmp/test-clone" "/tmp"
+
+# Verify output files
+cat /tmp/test-clone/.claude/settings.local.json
+cat /tmp/test-clone/.git/info/exclude
+cat /tmp/test-clone/.claude/CLAUDE.local.md
+
+# Clean up
+rm -rf /tmp/test-clone
+```
+
 ## Conventions
 
 - Shell: bash, `set -uo pipefail` in scripts

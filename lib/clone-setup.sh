@@ -40,8 +40,10 @@ EOF
     echo "    Created CLAUDE.local.md"
   fi
 
-  # Create .claude/settings.json with statusline pointing to our script.
-  local settings="$dir/.claude/settings.json"
+  # Create .claude/settings.local.json with statusline pointing to our script.
+  # settings.local.json is a local-only override that won't conflict with a
+  # user's committed settings.json (which may contain allowedTools, etc.).
+  local settings="$dir/.claude/settings.local.json"
   if [[ ! -f "$settings" ]]; then
     local sl_path="$PWORK_INSTALL_DIR/lib/statusline.sh"
     cat > "$settings" <<EOF
@@ -52,20 +54,20 @@ EOF
   }
 }
 EOF
-    echo "    Created .claude/settings.json (statusline)"
+    echo "    Created .claude/settings.local.json (statusline)"
   fi
 
   # Add pwork-generated files to git's local exclude so they don't pollute
   # git status. These are full relative paths (not globs), so they only match
-  # exactly .claude/CLAUDE.local.md and .claude/settings.json — no risk of
-  # accidentally ignoring user files.
+  # exactly .claude/CLAUDE.local.md and .claude/settings.local.json — no risk
+  # of accidentally ignoring user files.
   local exclude="$dir/.git/info/exclude"
   if ! grep -q 'CLAUDE.local.md' "$exclude" 2>/dev/null; then
     echo '.claude/CLAUDE.local.md' >> "$exclude"
     echo "    Added CLAUDE.local.md to git exclude"
   fi
-  if ! grep -q '\.claude/settings\.json' "$exclude" 2>/dev/null; then
-    echo '.claude/settings.json' >> "$exclude"
-    echo "    Added .claude/settings.json to git exclude"
+  if ! grep -q '\.claude/settings\.local\.json' "$exclude" 2>/dev/null; then
+    echo '.claude/settings.local.json' >> "$exclude"
+    echo "    Added .claude/settings.local.json to git exclude"
   fi
 }

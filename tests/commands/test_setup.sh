@@ -1,22 +1,22 @@
 #!/usr/bin/env bash
 # Tests for p-setup — apply statusline/clone config to existing clones.
 
-# Description: p-setup creates .claude/settings.json on clones that don't have one.
+# Description: p-setup creates .claude/settings.local.json on clones that don't have one.
 test_p_setup_creates_settings_json() {
   setup_test_workspace
   create_workspace 2
 
-  # Remove settings.json to simulate pre-existing clones without setup
-  rm -f "$TEST_WORKSPACE/p1/.claude/settings.json"
-  rm -f "$TEST_WORKSPACE/p2/.claude/settings.json"
+  # Remove settings.local.json to simulate pre-existing clones without setup
+  rm -f "$TEST_WORKSPACE/p1/.claude/settings.local.json"
+  rm -f "$TEST_WORKSPACE/p2/.claude/settings.local.json"
 
   (cd "$TEST_WORKSPACE/p1" && p-setup) >/dev/null 2>&1
 
-  [[ -f "$TEST_WORKSPACE/p1/.claude/settings.json" ]]
-  assert_status_ok $? "p-setup creates settings.json on p1"
+  [[ -f "$TEST_WORKSPACE/p1/.claude/settings.local.json" ]]
+  assert_status_ok $? "p-setup creates settings.local.json on p1"
 
-  [[ -f "$TEST_WORKSPACE/p2/.claude/settings.json" ]]
-  assert_status_ok $? "p-setup creates settings.json on p2"
+  [[ -f "$TEST_WORKSPACE/p2/.claude/settings.local.json" ]]
+  assert_status_ok $? "p-setup creates settings.local.json on p2"
 
   teardown_test_workspace
 }
@@ -91,8 +91,8 @@ test_p_setup_iterates_clones_under_zsh() {
   setup_test_workspace
   create_workspace 3
 
-  # Remove settings.json to verify p-setup recreates them
-  rm -f "$TEST_WORKSPACE"/p{1,2,3}/.claude/settings.json
+  # Remove settings.local.json to verify p-setup recreates them
+  rm -f "$TEST_WORKSPACE"/p{1,2,3}/.claude/settings.local.json
 
   # Run p-setup under zsh with errreturn — the old `for clone in $clones`
   # pattern treated the entire newline-separated list as one word in zsh,
@@ -109,15 +109,15 @@ test_p_setup_iterates_clones_under_zsh() {
   assert_status_ok "$status" "p-setup succeeds under zsh errreturn" || { teardown_test_workspace; return 1; }
   assert_contains "$output" "3 clone(s)" "p-setup iterates all clones under zsh" || { teardown_test_workspace; return 1; }
 
-  # Verify each clone got its own settings.json (not a single mangled path).
+  # Verify each clone got its own settings.local.json (not a single mangled path).
   # [[ -f path ]] tests that the file exists; $? is the exit status of the last command.
   # || { ...; return 1; } — if the assertion fails, clean up and bail out early.
-  [[ -f "$TEST_WORKSPACE/p1/.claude/settings.json" ]]
-  assert_status_ok $? "p1 has settings.json after zsh p-setup" || { teardown_test_workspace; return 1; }
-  [[ -f "$TEST_WORKSPACE/p2/.claude/settings.json" ]]
-  assert_status_ok $? "p2 has settings.json after zsh p-setup" || { teardown_test_workspace; return 1; }
-  [[ -f "$TEST_WORKSPACE/p3/.claude/settings.json" ]]
-  assert_status_ok $? "p3 has settings.json after zsh p-setup" || { teardown_test_workspace; return 1; }
+  [[ -f "$TEST_WORKSPACE/p1/.claude/settings.local.json" ]]
+  assert_status_ok $? "p1 has settings.local.json after zsh p-setup" || { teardown_test_workspace; return 1; }
+  [[ -f "$TEST_WORKSPACE/p2/.claude/settings.local.json" ]]
+  assert_status_ok $? "p2 has settings.local.json after zsh p-setup" || { teardown_test_workspace; return 1; }
+  [[ -f "$TEST_WORKSPACE/p3/.claude/settings.local.json" ]]
+  assert_status_ok $? "p3 has settings.local.json after zsh p-setup" || { teardown_test_workspace; return 1; }
 
   teardown_test_workspace
 }
