@@ -29,13 +29,39 @@ test_bootstrap_excludes_settings_json() {
   teardown_test_workspace
 }
 
-# Description: re-running clone setup does not overwrite custom settings.local.json.
+# Description: re-running clone setup merges statusLine into existing settings
+# without removing other keys.
+test_statusline_settings_merged_into_existing() {
+  # jq is required for the merge path; skip if unavailable.
+  # command -v checks if a command exists on the system.
+  if ! command -v jq &>/dev/null; then return 0; fi
+
+  setup_test_workspace
+  create_workspace 2
+
+  # Write custom content without statusLine
+  echo '{"custom": true}' > "$TEST_WORKSPACE/p1/.claude/settings.local.json"
+
+  # Re-run setup — should merge statusLine in
+  source "$PWORK_INSTALL_DIR/lib/clone-setup.sh"
+  _pwork_setup_clone "p1" "$TEST_WORKSPACE/p1" "$TEST_WORKSPACE"
+
+  local content
+  content=$(cat "$TEST_WORKSPACE/p1/.claude/settings.local.json")
+  assert_contains "$content" '"custom"' "existing keys preserved after merge"
+  assert_contains "$content" '"statusLine"' "statusLine merged into existing file"
+
+  teardown_test_workspace
+}
+
+# Description: re-running clone setup does not overwrite an existing statusLine.
 test_statusline_settings_not_overwritten() {
   setup_test_workspace
   create_workspace 2
 
-  # Write custom content to settings.local.json
-  echo '{"custom": true}' > "$TEST_WORKSPACE/p1/.claude/settings.local.json"
+  # Write a file that already has a statusLine — setup should leave it alone.
+  echo '{"statusLine": {"type": "command", "command": "/custom/path"}}' \
+    > "$TEST_WORKSPACE/p1/.claude/settings.local.json"
 
   # Re-run setup
   source "$PWORK_INSTALL_DIR/lib/clone-setup.sh"
@@ -43,7 +69,7 @@ test_statusline_settings_not_overwritten() {
 
   local content
   content=$(cat "$TEST_WORKSPACE/p1/.claude/settings.local.json")
-  assert_contains "$content" '"custom"' "settings.local.json not overwritten on re-run"
+  assert_contains "$content" '/custom/path' "existing statusLine not overwritten"
 
   teardown_test_workspace
 }

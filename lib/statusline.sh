@@ -62,6 +62,8 @@ STAGED=$(git -C "$DIR" diff --cached --numstat 2>/dev/null | wc -l | tr -d ' ')
 MODIFIED=$(git -C "$DIR" diff --numstat 2>/dev/null | wc -l | tr -d ' ')
 
 # ── Build content segments separated by │ ─────────────────
+# BOX_COLOR sets the border color — defaults to cyan, overridden below if context is high.
+BOX_COLOR="$CYN"
 SEP=" ${BOX_COLOR}│${RST} "
 CONTENT="${BLD}clone:${RST}${CYN}${CLONE:-?}${RST}"
 # -n tests if the string is non-empty.
@@ -79,8 +81,6 @@ fi
 # Context percentage — color shifts at 60% (yellow warning) and 80% (red).
 CTX_COLOR="$GRN"
 CTX_WARN=""
-# BOX_COLOR sets the border color — defaults to cyan, shifts to match context urgency.
-BOX_COLOR="$CYN"
 if [[ "$PCT" -ge 80 ]]; then
   CTX_COLOR="$RED"
   CTX_WARN=" ${RED}!!${RST}"
