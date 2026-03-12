@@ -69,10 +69,11 @@ EOF
     fi
   fi
 
-  # Add pwork-generated files to git's local exclude so they don't pollute
-  # git status. These are full relative paths (not globs), so they only match
-  # exactly .claude/CLAUDE.local.md and .claude/settings.local.json — no risk
-  # of accidentally ignoring user files.
+  # Add pwork-generated files to git's local exclude so they don't show as
+  # untracked in every clone's `git status`. We use .git/info/exclude (not
+  # .gitignore) so this stays local — it won't affect the repo or other
+  # contributors. These are exact paths, not globs, so no risk of
+  # accidentally ignoring user files.
   local exclude="$dir/.git/info/exclude"
   if ! grep -q 'CLAUDE.local.md' "$exclude" 2>/dev/null; then
     echo '.claude/CLAUDE.local.md' >> "$exclude"
