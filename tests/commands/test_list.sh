@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Tests for plist command.
 
+# Description: plist header includes the version number from VERSION.
 test_plist_header_shows_version() {
   setup_test_workspace
 
@@ -12,6 +13,7 @@ test_plist_header_shows_version() {
   teardown_test_workspace
 }
 
+# Description: plist output includes every available command.
 test_plist_includes_all_commands() {
   setup_test_workspace
 
@@ -22,6 +24,7 @@ test_plist_includes_all_commands() {
   assert_contains "$output" "p-status" "plist includes p-status"
   assert_contains "$output" "p-branches" "plist includes p-branches"
   assert_contains "$output" "p-new" "plist includes p-new"
+  assert_contains "$output" "p-setup" "plist includes p-setup"
   assert_contains "$output" "p-clean" "plist includes p-clean"
   assert_contains "$output" "p-update" "plist includes p-update"
   assert_contains "$output" "p-version" "plist includes p-version"

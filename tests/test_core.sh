@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Tests for core workspace functions: _pwork_root, _pwork_clones, _pwork_conf.
 
+# Description: _pwork_root returns the workspace root when called from a clone directory.
 test_pwork_root_from_clone_dir() {
   setup_test_workspace
   create_workspace 2
@@ -12,6 +13,7 @@ test_pwork_root_from_clone_dir() {
   teardown_test_workspace
 }
 
+# Description: _pwork_root walks up to the workspace root from a deeply nested subdirectory.
 test_pwork_root_from_nested_subdir() {
   setup_test_workspace
   create_workspace 2
@@ -24,6 +26,7 @@ test_pwork_root_from_nested_subdir() {
   teardown_test_workspace
 }
 
+# Description: _pwork_root fails with an error when called outside any workspace.
 test_pwork_root_outside_workspace() {
   setup_test_workspace
 
@@ -36,6 +39,7 @@ test_pwork_root_outside_workspace() {
   teardown_test_workspace
 }
 
+# Description: _pwork_root works when called directly from the workspace root.
 test_pwork_root_from_workspace_root() {
   setup_test_workspace
   create_workspace 2
@@ -47,6 +51,7 @@ test_pwork_root_from_workspace_root() {
   teardown_test_workspace
 }
 
+# Description: _pwork_clones lists clone names in ascending numeric order.
 test_pwork_clones_lists_in_order() {
   setup_test_workspace
   create_workspace 3
@@ -60,6 +65,7 @@ p3" "$result" "_pwork_clones lists in numeric order"
   teardown_test_workspace
 }
 
+# Description: _pwork_clones skips missing clone numbers (e.g. p2 removed).
 test_pwork_clones_handles_gaps() {
   setup_test_workspace
   create_workspace 3
@@ -75,6 +81,7 @@ p3" "$result" "_pwork_clones handles gaps"
   teardown_test_workspace
 }
 
+# Description: _pwork_clones sorts p10 after p3 (numeric, not lexicographic).
 test_pwork_clones_numeric_sort() {
   setup_test_workspace
   create_workspace 3
@@ -93,6 +100,7 @@ test_pwork_clones_numeric_sort() {
   teardown_test_workspace
 }
 
+# Description: _pwork_conf sources pwork.conf and sets PWORK_* and _PWORK_ROOT.
 test_pwork_conf_sets_variables() {
   setup_test_workspace
   create_workspace 2

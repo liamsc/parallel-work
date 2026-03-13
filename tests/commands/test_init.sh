@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Tests for p-init command: clone count validation and slug extraction.
 
+# Description: p-init rejects --clones 0 (below minimum).
 test_bad_clone_count_rejected() {
   setup_test_workspace
 
@@ -13,6 +14,7 @@ test_bad_clone_count_rejected() {
   teardown_test_workspace
 }
 
+# Description: p-init rejects --clones 99 (above maximum of 20).
 test_bad_clone_count_too_high() {
   setup_test_workspace
 
@@ -25,6 +27,7 @@ test_bad_clone_count_too_high() {
   teardown_test_workspace
 }
 
+# Description: p-init rejects non-numeric --clones values.
 test_bad_clone_count_non_numeric() {
   setup_test_workspace
 
@@ -37,6 +40,7 @@ test_bad_clone_count_non_numeric() {
   teardown_test_workspace
 }
 
+# Description: slug extraction works for GitHub SSH URLs (git@github.com:org/repo.git).
 test_slug_github_ssh() {
   setup_test_workspace
   local slug
@@ -45,6 +49,7 @@ test_slug_github_ssh() {
   teardown_test_workspace
 }
 
+# Description: slug extraction works for GitHub HTTPS URLs.
 test_slug_github_https() {
   setup_test_workspace
   local slug
@@ -53,6 +58,7 @@ test_slug_github_https() {
   teardown_test_workspace
 }
 
+# Description: slug extraction works for GitLab SSH URLs.
 test_slug_gitlab_ssh() {
   setup_test_workspace
   local slug
@@ -61,6 +67,7 @@ test_slug_gitlab_ssh() {
   teardown_test_workspace
 }
 
+# Description: slug extraction works for URLs without the .git suffix.
 test_slug_no_git_suffix() {
   setup_test_workspace
   local slug
@@ -69,6 +76,7 @@ test_slug_no_git_suffix() {
   teardown_test_workspace
 }
 
+# Description: slug extraction works for Bitbucket SSH URLs.
 test_slug_bitbucket() {
   setup_test_workspace
   local slug

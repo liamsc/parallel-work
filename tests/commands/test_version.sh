@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Tests for p-version command.
 
+# Description: _pwork_version returns the contents of the VERSION file.
 test_pwork_version_reads_version_file() {
   setup_test_workspace
 
@@ -14,6 +15,7 @@ test_pwork_version_reads_version_file() {
   teardown_test_workspace
 }
 
+# Description: _pwork_version returns "unknown" when the VERSION file is missing.
 test_pwork_version_returns_unknown_when_missing() {
   setup_test_workspace
 
@@ -25,6 +27,7 @@ test_pwork_version_returns_unknown_when_missing() {
   teardown_test_workspace
 }
 
+# Description: p-version output contains the version number from VERSION.
 test_p_version_includes_version_number() {
   setup_test_workspace
 
@@ -37,6 +40,7 @@ test_p_version_includes_version_number() {
   teardown_test_workspace
 }
 
+# Description: p-version output includes the "parallel-work" prefix.
 test_p_version_includes_parallel_work_prefix() {
   setup_test_workspace
 
@@ -47,6 +51,7 @@ test_p_version_includes_parallel_work_prefix() {
   teardown_test_workspace
 }
 
+# Description: p-version output includes the short git SHA of the install dir.
 test_p_version_includes_git_sha() {
   setup_test_workspace
 

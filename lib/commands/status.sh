@@ -19,7 +19,10 @@ p-status() {
   # local -a declares local array variables
   local -a clones branches commits statuses
   local dir
-  for clone in $(_pwork_clones); do
+  # IFS= read -r: read one clone name per line without trimming or backslash processing
+  local clone
+  while IFS= read -r clone; do
+    [[ -n "$clone" ]] || continue
     dir="$root/$clone"
     # += appends an element to a bash array
     clones+=("$clone")
@@ -35,7 +38,9 @@ p-status() {
     else
       statuses+=("dirty")
     fi
-  done
+  # < <(cmd) is process substitution: the while loop reads each clone name
+  # from _pwork_clones's output, one per line.
+  done < <(_pwork_clones)
 
   # ${#array[@]} gives the number of elements in the array
   local n=${#clones[@]}
