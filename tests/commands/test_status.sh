@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Tests for p-status dirty/clean detection.
 
+# Description: p-status reports a fresh clone as "clean".
 test_p_status_clean_clone() {
   setup_test_workspace
   create_workspace 1
@@ -12,6 +13,7 @@ test_p_status_clean_clone() {
   teardown_test_workspace
 }
 
+# Description: p-status reports "dirty" when a tracked file has unstaged changes.
 test_p_status_dirty_unstaged_changes() {
   setup_test_workspace
   create_workspace 1
@@ -28,6 +30,7 @@ test_p_status_dirty_unstaged_changes() {
   teardown_test_workspace
 }
 
+# Description: p-status reports "dirty" when there are staged but uncommitted changes.
 test_p_status_dirty_staged_changes() {
   setup_test_workspace
   create_workspace 1
@@ -43,6 +46,7 @@ test_p_status_dirty_staged_changes() {
   teardown_test_workspace
 }
 
+# Description: p-status reports "dirty" when there are untracked files.
 test_p_status_dirty_untracked_file() {
   setup_test_workspace
   create_workspace 1
@@ -57,6 +61,7 @@ test_p_status_dirty_untracked_file() {
   teardown_test_workspace
 }
 
+# Description: p-status reports "clean" when the only new files match .gitignore.
 test_p_status_ignores_gitignored_files() {
   setup_test_workspace
   create_workspace 1

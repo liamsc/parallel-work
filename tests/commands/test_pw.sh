@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Tests for pw command: workspace listing, jumping, and registry management.
 
+# Description: pw fails with "No workspaces registered" when the registry file doesn't exist.
 test_pw_no_registry_shows_error() {
   setup_test_workspace
   _PWORK_REGISTRY="$TEST_TMPDIR/no-such-file"
@@ -14,6 +15,7 @@ test_pw_no_registry_shows_error() {
   teardown_test_workspace
 }
 
+# Description: pw lists a registered workspace with its name, path, and clone count.
 test_pw_lists_registered_workspace() {
   setup_test_workspace
   create_workspace 3
@@ -31,6 +33,7 @@ test_pw_lists_registered_workspace() {
   teardown_test_workspace
 }
 
+# Description: pw N changes the working directory to the Nth workspace root.
 test_pw_n_changes_to_workspace_root() {
   setup_test_workspace
   create_workspace 2
@@ -47,6 +50,7 @@ test_pw_n_changes_to_workspace_root() {
   teardown_test_workspace
 }
 
+# Description: pw N fails when N is out of range.
 test_pw_n_invalid_number_fails() {
   setup_test_workspace
   create_workspace 2
@@ -63,6 +67,7 @@ test_pw_n_invalid_number_fails() {
   teardown_test_workspace
 }
 
+# Description: pw removes stale (nonexistent) workspace entries from the registry.
 test_pw_prunes_stale_entries() {
   setup_test_workspace
   create_workspace 2
@@ -85,6 +90,7 @@ test_pw_prunes_stale_entries() {
   teardown_test_workspace
 }
 
+# Description: pw --add registers a valid workspace and it appears in the list.
 test_pw_add_registers_workspace() {
   setup_test_workspace
   create_workspace 2
@@ -102,6 +108,7 @@ test_pw_add_registers_workspace() {
   teardown_test_workspace
 }
 
+# Description: pw --add rejects a directory that is not a parallel-work workspace.
 test_pw_add_rejects_non_workspace() {
   setup_test_workspace
   _PWORK_REGISTRY="$TEST_TMPDIR/workspaces"
@@ -115,6 +122,7 @@ test_pw_add_rejects_non_workspace() {
   teardown_test_workspace
 }
 
+# Description: registering the same workspace multiple times only stores one entry.
 test_pw_register_is_idempotent() {
   setup_test_workspace
   create_workspace 2
@@ -131,6 +139,7 @@ test_pw_register_is_idempotent() {
   teardown_test_workspace
 }
 
+# Description: typing a number at the pw interactive prompt jumps to that workspace.
 test_pw_interactive_selection_jumps_to_workspace() {
   setup_test_workspace
   create_workspace 2
@@ -148,6 +157,7 @@ test_pw_interactive_selection_jumps_to_workspace() {
   teardown_test_workspace
 }
 
+# Description: pressing enter at the pw prompt stays in the current directory.
 test_pw_interactive_empty_input_stays_put() {
   setup_test_workspace
   create_workspace 2
@@ -168,6 +178,7 @@ test_pw_interactive_empty_input_stays_put() {
   teardown_test_workspace
 }
 
+# Description: typing an out-of-range number at the pw prompt fails with "Invalid choice".
 test_pw_interactive_invalid_input_fails() {
   setup_test_workspace
   create_workspace 2
@@ -221,6 +232,7 @@ EOF
   WORKSPACE_ROOT="$saved_root"
 }
 
+# Description: pw lists both workspaces when two are registered.
 test_pw_lists_two_workspaces() {
   setup_test_workspace
   create_workspace 2
@@ -238,6 +250,7 @@ test_pw_lists_two_workspaces() {
   teardown_test_workspace
 }
 
+# Description: pw 1 jumps to the first workspace when two are registered.
 test_pw_n_jumps_to_first_of_two_workspaces() {
   setup_test_workspace
   create_workspace 2
@@ -256,6 +269,7 @@ test_pw_n_jumps_to_first_of_two_workspaces() {
   teardown_test_workspace
 }
 
+# Description: pw 2 jumps to the second workspace when two are registered.
 test_pw_n_jumps_to_second_of_two_workspaces() {
   setup_test_workspace
   create_workspace 2
@@ -274,6 +288,7 @@ test_pw_n_jumps_to_second_of_two_workspaces() {
   teardown_test_workspace
 }
 
+# Description: interactive prompt "2" jumps to the second of two workspaces.
 test_pw_interactive_selects_second_of_two_workspaces() {
   setup_test_workspace
   create_workspace 2
@@ -292,6 +307,7 @@ test_pw_interactive_selects_second_of_two_workspaces() {
   teardown_test_workspace
 }
 
+# Description: pw 3 fails when only 2 workspaces are registered.
 test_pw_invalid_number_with_two_workspaces() {
   setup_test_workspace
   create_workspace 2
@@ -310,6 +326,7 @@ test_pw_invalid_number_with_two_workspaces() {
   teardown_test_workspace
 }
 
+# Description: _pwork_list_workspaces returns exactly 2 lines for 2 registered workspaces.
 test_pw_list_workspaces_returns_both_paths() {
   setup_test_workspace
   create_workspace 2
@@ -330,6 +347,7 @@ test_pw_list_workspaces_returns_both_paths() {
   teardown_test_workspace
 }
 
+# Description: the registry file keeps both entries after repeated pw listings.
 test_pw_registry_intact_after_listing_two_workspaces() {
   setup_test_workspace
   create_workspace 2
@@ -351,6 +369,7 @@ test_pw_registry_intact_after_listing_two_workspaces() {
   teardown_test_workspace
 }
 
+# Description: pw shows the correct clone count for each workspace (3 and 2).
 test_pw_shows_correct_clone_counts_for_two_workspaces() {
   setup_test_workspace
   create_workspace 3
@@ -374,6 +393,7 @@ test_pw_shows_correct_clone_counts_for_two_workspaces() {
   teardown_test_workspace
 }
 
+# Description: pw shows distinct project names (repo, repo2) for two workspaces.
 test_pw_shows_distinct_names_for_two_workspaces() {
   setup_test_workspace
   create_workspace 2
@@ -391,6 +411,7 @@ test_pw_shows_distinct_names_for_two_workspaces() {
   teardown_test_workspace
 }
 
+# Description: pw listing works under zsh errreturn (catches (( i++ )) exit-code bug).
 test_pw_listing_survives_errexit() {
   # command -v checks if zsh is available; skip on systems without it (e.g. Ubuntu CI)
   if ! command -v zsh &>/dev/null; then return 0; fi
@@ -425,6 +446,7 @@ test_pw_listing_survives_errexit() {
   teardown_test_workspace
 }
 
+# Description: pw N jump works under zsh errreturn.
 test_pw_n_jump_survives_errexit() {
   # command -v checks if zsh is available; skip on systems without it (e.g. Ubuntu CI)
   if ! command -v zsh &>/dev/null; then return 0; fi

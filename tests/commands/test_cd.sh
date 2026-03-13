@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Tests for p1–pN quick-cd commands.
 
+# Description: pN changes the working directory to the corresponding clone.
 test_p_changes_directory() {
   setup_test_workspace
   create_workspace 3
@@ -14,6 +15,7 @@ test_p_changes_directory() {
   teardown_test_workspace
 }
 
+# Description: pN fails with an error when the clone directory doesn't exist.
 test_p_fails_for_nonexistent() {
   setup_test_workspace
   create_workspace 2

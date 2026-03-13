@@ -52,6 +52,19 @@ p-init git@github.com:org/repo.git ~/pwork-repos/repo \
 | `--branch NAME` | Override default branch (auto-detected if omitted) |
 | `--sync-cmd "..."` | Command to run after `git pull` (e.g. `npm install`, `bundle install`) |
 
+## Statusline
+
+Each clone gets a Claude Code statusline showing clone identity, repo, branch, git state, context usage, and current task — all inside a color-coded box.
+
+![Statusline preview](assets/statusline-preview.png)
+
+The border color shifts as context fills up:
+- **Cyan** — normal (under 70%)
+- **Yellow** — warning (70–79%)
+- **Red** — critical (80%+)
+
+The statusline is set up automatically for new clones created by `p-init` or `p-new`. To enable it on existing clones, run `p-setup` from inside the workspace.
+
 ## Multiple workspaces
 
 Each workspace is isolated. Commands auto-detect which workspace you're in based on your current directory:
@@ -221,6 +234,16 @@ Creates the next `pN` directory in the current workspace with all the configured
 ```bash
 p-new
 ```
+
+### `p-setup` — apply config to existing clones
+
+Creates `.claude/settings.json` (statusline), `CLAUDE.local.md`, and git excludes on all clones in the current workspace. Useful after upgrading parallel-work or for clones created before the statusline feature.
+
+```bash
+p-setup
+```
+
+Existing files are never overwritten — only missing files are created.
 
 ### `p-clean` — recycle merged clones
 

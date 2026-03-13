@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Tests for p-sync command.
 
+# Description: p-sync pulls new upstream commits into all clones.
 test_p_sync_pulls_all_clones() {
   setup_test_workspace
   create_workspace 3
@@ -31,6 +32,7 @@ test_p_sync_pulls_all_clones() {
   teardown_test_workspace
 }
 
+# Description: p-sync runs PWORK_SYNC_CMD in each clone after pulling.
 test_p_sync_runs_sync_cmd() {
   setup_test_workspace
   create_workspace 3
@@ -51,6 +53,7 @@ test_p_sync_runs_sync_cmd() {
   teardown_test_workspace
 }
 
+# Description: p-sync prints syncing/done progress for each clone.
 test_p_sync_reports_output() {
   setup_test_workspace
   create_workspace 3

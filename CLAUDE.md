@@ -19,11 +19,13 @@ All code lives in `lib/`:
 | `commands/status.sh` | `p-status` — branch, commit, dirty/clean, and PR status |
 | `commands/branches.sh` | `p-branches` — quick branch + PR/merge status per clone |
 | `commands/new.sh` | `p-new` — create the next pN clone |
+| `commands/setup.sh` | `p-setup` — apply statusline + clone config to existing clones |
 | `commands/clean.sh` | `p-clean` — recycle clones whose PR has been merged |
 | `commands/update.sh` | `p-update` — update parallel-work to the latest version |
 | `commands/version.sh` | `p-version` — show installed version and git SHA |
 | `commands/list.sh` | `plist` + `yolo` — help listing and alias |
-| `clone-setup.sh` | Per-clone setup: symlinks, `CLAUDE.local.md`, git exclude |
+| `statusline.sh` | Claude Code statusline script — shows clone name, repo, branch, git state, context %, and current task |
+| `clone-setup.sh` | Per-clone setup: symlinks, `CLAUDE.local.md`, statusline settings, git exclude |
 | `bootstrap.sh` | Workspace initialization — creates and configures N clones |
 | `gh.sh` | GitHub CLI helpers: `_pwork_check_gh`, `_pwork_fetch_pr_branches`, `_pwork_branch_status` |
 | `shell-helpers.sh` | Entry point sourced from `.zshrc` — loads all other lib files, provides `p1`–`pN` functions |
@@ -39,6 +41,7 @@ All code lives in `lib/`:
 | `p-status` | Branch, commit, dirty/clean, and PR status table |
 | `p-branches` | Quick branch + PR/merge status per clone |
 | `p-new` | Create the next pN clone |
+| `p-setup` | Apply statusline + clone config to all existing clones |
 | `p-clean [pN]` | Recycle clones whose PR has been merged |
 | `p-update` | Update parallel-work to the latest version |
 | `p-version` | Show installed version and git SHA |
@@ -54,6 +57,33 @@ All code lives in `lib/`:
 - Helpers: `tests/helpers.sh` — assertions (`assert_eq`, `assert_contains`, `assert_status_fail`, etc.) and workspace fixtures
 - Fixture pattern: `setup_test_workspace` creates a bare origin + tmpdir, `create_workspace N` bootstraps N clones, `teardown_test_workspace` cleans up
 - Tests run in subshells; stdout is suppressed, stderr shown on failure
+- Every test function must have a `# Description:` comment above it explaining what the test verifies
+
+## Manual testing
+
+To test `_pwork_setup_clone` without creating a full workspace:
+
+```bash
+# Create a fake clone with a git repo
+mkdir -p /tmp/test-clone/.claude /tmp/test-clone/.git/info
+touch /tmp/test-clone/.git/info/exclude
+
+# Source the setup code
+source lib/clone-setup.sh
+
+# Run it (needs PWORK_INSTALL_DIR and PWORK_SHARED_FILES)
+export PWORK_INSTALL_DIR="$PWD"
+PWORK_SHARED_FILES=()
+_pwork_setup_clone "p1" "/tmp/test-clone" "/tmp"
+
+# Verify output files
+cat /tmp/test-clone/.claude/settings.local.json
+cat /tmp/test-clone/.git/info/exclude
+cat /tmp/test-clone/.claude/CLAUDE.local.md
+
+# Clean up
+rm -rf /tmp/test-clone
+```
 
 ## Conventions
 
