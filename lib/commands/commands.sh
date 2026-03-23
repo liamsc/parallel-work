@@ -42,6 +42,25 @@ _pwork_domain_label() {
   esac
 }
 
+# Return file-path glob patterns for a domain, used as paths: frontmatter
+# in .claude/rules/ files so Claude loads commands only when relevant.
+# Domains with no patterns (git, general) return empty — always loaded.
+_pwork_domain_paths() {
+  case "$1" in
+    aws)     echo '**/*.tf **/cdk/** **/cloudformation/** **/sam/** **/*aws*' ;;
+    docker)  echo '**/Dockerfile* **/docker-compose* **/.dockerignore' ;;
+    npm)     echo '**/package.json **/*.ts **/*.js **/*.tsx **/*.jsx **/*.mjs **/*.cjs' ;;
+    python)  echo '**/*.py **/requirements*.txt **/pyproject.toml **/Pipfile **/setup.py **/setup.cfg' ;;
+    rust)    echo '**/*.rs **/Cargo.toml **/Cargo.lock' ;;
+    go)      echo '**/*.go **/go.mod **/go.sum' ;;
+    infra)   echo '**/*.tf **/k8s/** **/kubernetes/** **/helm/** **/*.yaml **/*.yml' ;;
+    build)   echo '**/Makefile* **/CMakeLists.txt **/*.mk' ;;
+    test)    echo '**/*test* **/*spec* **/__tests__/**' ;;
+    # git and general — no path scoping, always loaded.
+    *)       ;;
+  esac
+}
+
 # ── Subcommands ───────────────────────────────────────────────
 
 # Show a frequency-sorted table of all logged commands.
@@ -153,8 +172,21 @@ _pwork_commands_apply() {
 
     [[ -z "$entries" ]] && continue
 
-    # Write the domain file.
+    # Write the domain file, with optional paths: frontmatter so Claude
+    # loads the file only when working with relevant source files.
     {
+      local paths
+      paths=$(_pwork_domain_paths "$domain")
+      if [[ -n "$paths" ]]; then
+        echo "---"
+        echo "paths:"
+        # Word-split the space-separated patterns into individual lines.
+        for p in $paths; do
+          echo "  - \"$p\""
+        done
+        echo "---"
+        echo ""
+      fi
       echo "# $label Commands"
       echo ""
       echo "Commonly-used CLI commands captured from development sessions."

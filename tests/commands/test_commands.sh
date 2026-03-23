@@ -186,6 +186,58 @@ test_p_commands_no_log() {
   teardown_test_workspace
 }
 
+# Description: p-commands apply adds paths: frontmatter to path-scoped domains.
+test_p_commands_apply_frontmatter() {
+  setup_test_workspace
+  create_workspace 2
+
+  local log="$TEST_WORKSPACE/.parallel-work/command-log.jsonl"
+  _seed_command_log "$log"
+
+  (cd "$TEST_WORKSPACE/p1" && p-commands apply) >/dev/null 2>&1
+
+  # aws.md should have paths: frontmatter (it's a path-scoped domain).
+  local aws_content
+  aws_content=$(cat "$TEST_WORKSPACE/p1/.claude/rules/commands/aws.md")
+  assert_contains "$aws_content" "---" "aws.md should have YAML frontmatter delimiters"
+  assert_contains "$aws_content" "paths:" "aws.md should have paths: key"
+  assert_contains "$aws_content" '**/*.tf' "aws.md should include terraform glob"
+
+  # docker.md should also have paths: frontmatter.
+  local docker_content
+  docker_content=$(cat "$TEST_WORKSPACE/p1/.claude/rules/commands/docker.md")
+  assert_contains "$docker_content" "paths:" "docker.md should have paths: key"
+  assert_contains "$docker_content" '**/Dockerfile*' "docker.md should include Dockerfile glob"
+
+  teardown_test_workspace
+}
+
+# Description: p-commands apply omits frontmatter for always-loaded domains (git, general).
+test_p_commands_apply_no_frontmatter_for_git() {
+  setup_test_workspace
+  create_workspace 2
+
+  local log="$TEST_WORKSPACE/.parallel-work/command-log.jsonl"
+  # Seed with git commands.
+  mkdir -p "$(dirname "$log")"
+  cat > "$log" <<'EOF'
+{"ts":"2026-03-22T10:00:00Z","clone":"p1","cmd":"git rebase main","domain":"git"}
+{"ts":"2026-03-22T10:01:00Z","clone":"p1","cmd":"git cherry-pick abc123","domain":"git"}
+EOF
+
+  (cd "$TEST_WORKSPACE/p1" && p-commands apply) >/dev/null 2>&1
+
+  local git_content
+  git_content=$(cat "$TEST_WORKSPACE/p1/.claude/rules/commands/git.md")
+
+  # git.md should NOT have paths: frontmatter — git commands are always relevant.
+  assert_not_contains "$git_content" "paths:" "git.md should NOT have paths: frontmatter"
+  # Should still have the content heading.
+  assert_contains "$git_content" "# Git Commands" "git.md should have heading"
+
+  teardown_test_workspace
+}
+
 # Description: p-commands shows usage for unknown subcommands.
 test_p_commands_usage() {
   setup_test_workspace
