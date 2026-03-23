@@ -40,13 +40,14 @@ EOF
     echo "    Created CLAUDE.local.md"
   fi
 
-  # Ensure .claude/settings.local.json has our statusLine config.
+  # Ensure .claude/settings.local.json has our statusLine and hooks config.
   # settings.local.json is a local-only override that won't conflict with a
   # user's committed settings.json (which may contain allowedTools, etc.).
-  # If the file already exists, we merge in statusLine (requires jq);
+  # If the file already exists, we merge in missing keys (requires jq);
   # if it doesn't exist, we create it from scratch.
   local settings="$dir/.claude/settings.local.json"
   local sl_path="$PWORK_INSTALL_DIR/lib/statusline.sh"
+  local hook_path="$PWORK_INSTALL_DIR/lib/command-log.sh"
   if [[ ! -f "$settings" ]]; then
     mkdir -p "$dir/.claude"
     cat > "$settings" <<EOF
@@ -54,18 +55,44 @@ EOF
   "statusLine": {
     "type": "command",
     "command": "$sl_path"
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$hook_path"
+          }
+        ]
+      }
+    ]
   }
 }
 EOF
-    echo "    Created .claude/settings.local.json (statusline)"
+    echo "    Created .claude/settings.local.json (statusline + command-log hook)"
   elif command -v jq &>/dev/null; then
+    local tmp="$settings.tmp"
+    local changed=false
+
     # Merge statusLine into existing file only if the key is missing.
     # jq's "// empty" returns empty when .statusLine is null/absent.
     if ! jq -e '.statusLine // empty' "$settings" &>/dev/null; then
-      local tmp="$settings.tmp"
       jq --arg cmd "$sl_path" '.statusLine = {"type":"command","command":$cmd}' "$settings" > "$tmp" \
         && mv "$tmp" "$settings"
       echo "    Added statusLine to existing .claude/settings.local.json"
+      changed=true
+    fi
+
+    # Merge hooks config if the key is missing.
+    if ! jq -e '.hooks // empty' "$settings" &>/dev/null; then
+      jq --arg cmd "$hook_path" \
+        '.hooks = {"PostToolUse":[{"matcher":"Bash","hooks":[{"type":"command","command":$cmd}]}]}' \
+        "$settings" > "$tmp" \
+        && mv "$tmp" "$settings"
+      echo "    Added command-log hook to existing .claude/settings.local.json"
+      changed=true
     fi
   fi
 

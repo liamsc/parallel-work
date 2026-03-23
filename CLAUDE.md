@@ -24,8 +24,10 @@ All code lives in `lib/`:
 | `commands/update.sh` | `p-update` — update parallel-work to the latest version |
 | `commands/version.sh` | `p-version` — show installed version and git SHA |
 | `commands/list.sh` | `plist` + `yolo` — help listing and alias |
+| `commands/commands.sh` | `p-commands` — view, suggest, and apply CLI command documentation from hook logs |
+| `command-log.sh` | PostToolUse hook — logs CLI commands to JSONL for `p-commands` analysis |
 | `statusline.sh` | Claude Code statusline script — shows clone name, repo, branch, git state, context %, and current task |
-| `clone-setup.sh` | Per-clone setup: symlinks, `CLAUDE.local.md`, statusline settings, git exclude |
+| `clone-setup.sh` | Per-clone setup: symlinks, `CLAUDE.local.md`, statusline + hook settings, git exclude |
 | `bootstrap.sh` | Workspace initialization — creates and configures N clones |
 | `gh.sh` | GitHub CLI helpers: `_pwork_check_gh`, `_pwork_fetch_pr_branches`, `_pwork_branch_status` |
 | `shell-helpers.sh` | Entry point sourced from `.zshrc` — loads all other lib files, provides `p1`–`pN` functions |
@@ -45,6 +47,7 @@ All code lives in `lib/`:
 | `p-clean [pN]` | Recycle clones whose PR has been merged |
 | `p-update` | Update parallel-work to the latest version |
 | `p-version` | Show installed version and git SHA |
+| `p-commands [suggest\|apply\|clear\|domains]` | View, suggest, or apply CLI command documentation |
 | `plist` | List all commands |
 
 ## Testing
