@@ -78,7 +78,7 @@ test_p_commands_suggest_domain_filter() {
   teardown_test_workspace
 }
 
-# Description: p-commands apply creates domain files in .claude/commands/.
+# Description: p-commands apply creates domain files in .claude/rules/commands/.
 test_p_commands_apply() {
   setup_test_workspace
   create_workspace 2
@@ -89,28 +89,22 @@ test_p_commands_apply() {
   local output
   output=$(cd "$TEST_WORKSPACE/p1" && p-commands apply 2>&1)
 
-  # Check that domain files were created.
+  # Check that domain files were created under .claude/rules/commands/.
   # -f tests if the file exists.
-  [[ -f "$TEST_WORKSPACE/p1/.claude/commands/aws.md" ]]
+  [[ -f "$TEST_WORKSPACE/p1/.claude/rules/commands/aws.md" ]]
   assert_status_ok $? "aws.md should be created"
 
-  [[ -f "$TEST_WORKSPACE/p1/.claude/commands/npm.md" ]]
+  [[ -f "$TEST_WORKSPACE/p1/.claude/rules/commands/npm.md" ]]
   assert_status_ok $? "npm.md should be created"
 
-  [[ -f "$TEST_WORKSPACE/p1/.claude/commands/docker.md" ]]
+  [[ -f "$TEST_WORKSPACE/p1/.claude/rules/commands/docker.md" ]]
   assert_status_ok $? "docker.md should be created"
 
   # Verify content of aws.md.
   local aws_content
-  aws_content=$(cat "$TEST_WORKSPACE/p1/.claude/commands/aws.md")
+  aws_content=$(cat "$TEST_WORKSPACE/p1/.claude/rules/commands/aws.md")
   assert_contains "$aws_content" "# AWS Commands" "aws.md should have heading"
   assert_contains "$aws_content" "aws s3 ls" "aws.md should have the command"
-
-  # Verify CLAUDE.local.md was updated with references.
-  local local_md
-  local_md=$(cat "$TEST_WORKSPACE/p1/.claude/CLAUDE.local.md")
-  assert_contains "$local_md" "## CLI Command References" "should have references heading"
-  assert_contains "$local_md" ".claude/commands/aws.md" "should reference aws.md"
 
   teardown_test_workspace
 }
@@ -126,11 +120,11 @@ test_p_commands_apply_single_domain() {
   local output
   output=$(cd "$TEST_WORKSPACE/p1" && p-commands apply aws 2>&1)
 
-  [[ -f "$TEST_WORKSPACE/p1/.claude/commands/aws.md" ]]
+  [[ -f "$TEST_WORKSPACE/p1/.claude/rules/commands/aws.md" ]]
   assert_status_ok $? "aws.md should be created"
 
   # npm.md should NOT be created when filtering to aws only.
-  [[ ! -f "$TEST_WORKSPACE/p1/.claude/commands/npm.md" ]]
+  [[ ! -f "$TEST_WORKSPACE/p1/.claude/rules/commands/npm.md" ]]
   assert_status_ok $? "npm.md should NOT be created with aws filter"
 
   teardown_test_workspace

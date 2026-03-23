@@ -113,7 +113,8 @@ _pwork_commands_suggest() {
   done
 }
 
-# Write domain files to .claude/commands/ and update CLAUDE.local.md.
+# Write domain files to .claude/rules/commands/ — Claude Code auto-discovers
+# all *.md files under .claude/rules/ so no CLAUDE.local.md wiring is needed.
 _pwork_commands_apply() {
   local log_file filter_domain="${1:-}"
   log_file="$(_pwork_command_log_path)"
@@ -123,13 +124,13 @@ _pwork_commands_apply() {
     return 1
   fi
 
-  # Determine the project root for writing .claude/commands/ files.
+  # Determine the project root for writing .claude/rules/commands/ files.
   local project_root
   project_root="$(_pwork_root 2>/dev/null)" || {
     project_root=$(git rev-parse --show-toplevel 2>/dev/null) || project_root="$PWD"
   }
 
-  local commands_dir="$project_root/.claude/commands"
+  local commands_dir="$project_root/.claude/rules/commands"
   mkdir -p "$commands_dir"
 
   # Get domains to process.
@@ -140,7 +141,6 @@ _pwork_commands_apply() {
     domains=$(jq -r '.domain' "$log_file" | sort -u)
   fi
 
-  local written_files=()
   for domain in $domains; do
     local label
     label="$(_pwork_domain_label "$domain")"
@@ -166,50 +166,8 @@ _pwork_commands_apply() {
       done
     } > "$domain_file"
 
-    written_files+=("$domain_file")
     echo "  Wrote $domain_file"
   done
-
-  # Update CLAUDE.local.md with references to the domain files.
-  local local_md="$project_root/.claude/CLAUDE.local.md"
-  local ref_marker="## CLI Command References"
-
-  if [[ ! -f "$local_md" ]]; then
-    mkdir -p "$project_root/.claude"
-    echo "$ref_marker" > "$local_md"
-  fi
-
-  # Only add the reference section if it's not already there.
-  if ! grep -q "$ref_marker" "$local_md" 2>/dev/null; then
-    # Append a blank line + the references section.
-    echo "" >> "$local_md"
-    echo "$ref_marker" >> "$local_md"
-  fi
-
-  # Rebuild the file list under the marker — strip old list, write new one.
-  # sed deletes lines between the marker and the next ## heading (or EOF).
-  local tmp="$local_md.tmp"
-  # Keep everything up to and including the marker line, delete the old list.
-  sed -n "1,/^$ref_marker$/p" "$local_md" > "$tmp"
-  echo "" >> "$tmp"
-  echo "The following files contain commonly-used CLI commands for this project:" >> "$tmp"
-  for f in "${written_files[@]}"; do
-    # Convert absolute path to relative from project root.
-    local rel="${f#$project_root/}"
-    echo "- $rel" >> "$tmp"
-  done
-
-  # Append anything after the next ## heading (if there is one).
-  # awk starts printing once it sees a ## line that isn't our marker.
-  awk -v marker="$ref_marker" '
-    BEGIN { found_marker=0; past_section=0 }
-    found_marker && /^## / && $0 != marker { past_section=1 }
-    past_section { print; next }
-    /^## CLI Command References/ { found_marker=1; next }
-  ' "$local_md" >> "$tmp"
-
-  mv "$tmp" "$local_md"
-  echo "  Updated $local_md"
 }
 
 # List domains that have logged commands.
