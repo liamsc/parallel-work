@@ -82,6 +82,33 @@ test_p_setup_fails_outside_workspace() {
   teardown_test_workspace
 }
 
+# Description: p-setup updates a stale statusLine.command path to the current
+# PWORK_INSTALL_DIR, fixing clones that were set up before an upgrade.
+test_p_setup_updates_stale_statusline_path() {
+  if ! command -v jq &>/dev/null; then return 0; fi
+
+  setup_test_workspace
+  create_workspace 1
+
+  # Write a settings.local.json with a stale statusLine path
+  cat > "$TEST_WORKSPACE/p1/.claude/settings.local.json" <<EOF
+{
+  "statusLine": {
+    "type": "command",
+    "command": "/old/stale/path/statusline.sh"
+  }
+}
+EOF
+
+  (cd "$TEST_WORKSPACE/p1" && p-setup) >/dev/null 2>&1
+
+  local actual
+  actual=$(jq -r '.statusLine.command' "$TEST_WORKSPACE/p1/.claude/settings.local.json")
+  assert_eq "$actual" "$PWORK_INSTALL_DIR/lib/statusline.sh" "p-setup updates stale statusLine path"
+
+  teardown_test_workspace
+}
+
 # Description: p-setup iterates all clones correctly under zsh with errreturn,
 # catching the (( count++ )) exit-code-1 bug when count=0.
 test_p_setup_iterates_clones_under_zsh() {
