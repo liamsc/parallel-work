@@ -61,21 +61,27 @@ BRANCH=$(git -C "$DIR" branch --show-current 2>/dev/null)
 STAGED=$(git -C "$DIR" diff --cached --numstat 2>/dev/null | wc -l | tr -d ' ')
 MODIFIED=$(git -C "$DIR" diff --numstat 2>/dev/null | wc -l | tr -d ' ')
 
-# ── Build content segments separated by │ ─────────────────
+# ── Terminal width ────────────────────────────────────────
+# tput cols reads the terminal width; fall back to 80 if unavailable.
+TERM_W=$(tput cols 2>/dev/null || echo 80)
+# Box borders + padding consume 4 chars: "│ " on the left + " │" on the right.
+(( MAX_W = TERM_W - 4 ))
+
+# ── Build individual segments ─────────────────────────────
 # BOX_COLOR sets the border color — defaults to cyan, overridden below if context is high.
 BOX_COLOR="$CYN"
-SEP=" ${BOX_COLOR}│${RST} "
-CONTENT="${BLD}clone:${RST}${CYN}${CLONE:-?}${RST}"
-# -n tests if the string is non-empty.
-[[ -n "$SLUG" ]] && CONTENT="${CONTENT}${SEP}${BLD}repo:${RST}${MAG}$SLUG${RST}"
+
+CLONE_SEG="${BLD}clone:${RST}${CYN}${CLONE:-?}${RST}"
+REPO_SEG=""
+[[ -n "$SLUG" ]] && REPO_SEG="${BLD}repo:${RST}${MAG}$SLUG${RST}"
 
 # Branch + dirty state grouped together.
+BRANCH_SEG=""
 if [[ -n "$BRANCH" ]]; then
   BRANCH_SEG="${BLD}branch:${RST}${GRN}$BRANCH${RST}"
   # -gt 0 means "greater than zero"
   [[ "$STAGED" -gt 0 ]] && BRANCH_SEG="$BRANCH_SEG ${GRN}+${STAGED}${RST}"
   [[ "$MODIFIED" -gt 0 ]] && BRANCH_SEG="$BRANCH_SEG ${YLW}~${MODIFIED}${RST}"
-  CONTENT="${CONTENT}${SEP}${BRANCH_SEG}"
 fi
 
 # Context percentage — color shifts at 60% (yellow warning) and 80% (red).
@@ -90,7 +96,66 @@ elif [[ "$PCT" -ge 70 ]]; then
   CTX_WARN=" ${YLW}!${RST}"
   BOX_COLOR="$YLW"
 fi
-CONTENT="${CONTENT}${SEP}${BLD}ctx:${RST}${CTX_COLOR}${PCT}%${RST}${CTX_WARN}"
+CTX_SEG="${BLD}ctx:${RST}${CTX_COLOR}${PCT}%${RST}${CTX_WARN}"
+
+# ── Assemble content with width fitting ───────────────────
+# Strip ANSI codes to measure visible character width.
+# sed removes all escape sequences (\033[...m).
+strip_ansi() { echo -e "$1" | sed $'s/\033\\[[0-9;]*m//g'; }
+
+# join_segments concatenates non-empty segments with │ separators.
+# Usage: join_segments "seg1" "seg2" "seg3" ...
+join_segments() {
+  local sep=" ${BOX_COLOR}│${RST} "
+  local result="" seg
+  for seg in "$@"; do
+    [[ -z "$seg" ]] && continue
+    [[ -n "$result" ]] && result="${result}${sep}"
+    result="${result}${seg}"
+  done
+  echo "$result"
+}
+
+# Try full content first; progressively drop segments if too wide.
+# Priority: clone (always) > ctx (always) > branch (truncate, then drop) > repo (drop first).
+CONTENT=$(join_segments "$CLONE_SEG" "$REPO_SEG" "$BRANCH_SEG" "$CTX_SEG")
+CONTENT_PLAIN=$(strip_ansi "$CONTENT")
+CONTENT_LEN=${#CONTENT_PLAIN}
+
+# Step 1: drop repo slug if too wide.
+if [[ "$CONTENT_LEN" -gt "$MAX_W" && -n "$REPO_SEG" ]]; then
+  CONTENT=$(join_segments "$CLONE_SEG" "$BRANCH_SEG" "$CTX_SEG")
+  CONTENT_PLAIN=$(strip_ansi "$CONTENT")
+  CONTENT_LEN=${#CONTENT_PLAIN}
+fi
+
+# Step 2: truncate branch name if still too wide.
+if [[ "$CONTENT_LEN" -gt "$MAX_W" && -n "$BRANCH_SEG" ]]; then
+  # Measure how much space is available for the branch segment.
+  local_content=$(join_segments "$CLONE_SEG" "" "$CTX_SEG")
+  local_plain=$(strip_ansi "$local_content")
+  local_len=${#local_plain}
+  # 5 = " │ " separator (3) + 2 chars minimum for the segment to be useful.
+  (( avail = MAX_W - local_len - 3 ))
+  if [[ "$avail" -ge 10 ]]; then
+    # "branch:" prefix is 7 chars; leave room for at least a few chars + "…"
+    (( name_avail = avail - 7 - 1 ))
+    if [[ "$name_avail" -gt 0 ]]; then
+      TRUNC_BRANCH="${BRANCH:0:$name_avail}…"
+      BRANCH_SEG="${BLD}branch:${RST}${GRN}$TRUNC_BRANCH${RST}"
+      CONTENT=$(join_segments "$CLONE_SEG" "$BRANCH_SEG" "$CTX_SEG")
+      CONTENT_PLAIN=$(strip_ansi "$CONTENT")
+      CONTENT_LEN=${#CONTENT_PLAIN}
+    fi
+  fi
+fi
+
+# Step 3: drop branch entirely if still too wide.
+if [[ "$CONTENT_LEN" -gt "$MAX_W" && -n "$BRANCH_SEG" ]]; then
+  CONTENT=$(join_segments "$CLONE_SEG" "$CTX_SEG")
+  CONTENT_PLAIN=$(strip_ansi "$CONTENT")
+  CONTENT_LEN=${#CONTENT_PLAIN}
+fi
 
 # ── Task line (appended inside the box if set) ────────────
 TASK_LINE=""
@@ -102,19 +167,22 @@ if [[ -f "$TASK_FILE" ]]; then
     | head -1 | xargs)
   if [[ -n "$TASK" && "$TASK" != "_unassigned_" ]]; then
     TASK_LINE="${BLD}task:${RST}${DIM}${TASK}${RST}"
+    # Truncate task line if it exceeds available width.
+    TASK_PLAIN=$(strip_ansi "$TASK_LINE")
+    TASK_LEN=${#TASK_PLAIN}
+    if [[ "$TASK_LEN" -gt "$MAX_W" ]]; then
+      # "task:" is 5 chars; truncate the task text with "…".
+      (( task_avail = MAX_W - 5 - 1 ))
+      TASK="${TASK:0:$task_avail}…"
+      TASK_LINE="${BLD}task:${RST}${DIM}${TASK}${RST}"
+    fi
   fi
 fi
+TASK_PLAIN=$(strip_ansi "$TASK_LINE")
+TASK_LEN=${#TASK_PLAIN}
 
 # ── Render boxed output ───────────────────────────────────
-# Strip ANSI codes to measure visible character width for the box border.
-# sed removes all escape sequences (\033[...m); wc -m counts chars.
-strip_ansi() { echo -e "$1" | sed $'s/\033\\[[0-9;]*m//g'; }
-CONTENT_PLAIN=$(strip_ansi "$CONTENT")
-TASK_PLAIN=$(strip_ansi "$TASK_LINE")
-
 # ${#var} gives the string length; pick the longer line for box width.
-CONTENT_LEN=${#CONTENT_PLAIN}
-TASK_LEN=${#TASK_PLAIN}
 # (( )) is arithmetic context
 (( BOX_W = CONTENT_LEN > TASK_LEN ? CONTENT_LEN : TASK_LEN ))
 # Add 2 for padding (one space each side).
