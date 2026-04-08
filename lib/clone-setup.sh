@@ -59,14 +59,12 @@ EOF
 EOF
     echo "    Created .claude/settings.local.json (statusline)"
   elif command -v jq &>/dev/null; then
-    # Merge statusLine into existing file only if the key is missing.
-    # jq's "// empty" returns empty when .statusLine is null/absent.
-    if ! jq -e '.statusLine // empty' "$settings" &>/dev/null; then
-      local tmp="$settings.tmp"
-      jq --arg cmd "$sl_path" '.statusLine = {"type":"command","command":$cmd}' "$settings" > "$tmp" \
-        && mv "$tmp" "$settings"
-      echo "    Added statusLine to existing .claude/settings.local.json"
-    fi
+    # Always update statusLine to current install path.
+    # Fixes stale paths after upgrades or install directory changes.
+    local tmp="$settings.tmp"
+    jq --arg cmd "$sl_path" '.statusLine = {"type":"command","command":$cmd}' "$settings" > "$tmp" \
+      && mv "$tmp" "$settings"
+    echo "    Updated statusLine in .claude/settings.local.json"
   fi
 
   # Add pwork-generated files to git's local exclude so they don't show as
