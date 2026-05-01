@@ -62,28 +62,71 @@ assert_status_fail() {
 # per-test sandbox. Catches the classic footgun where an unset variable
 # turns "$TEST_TMPDIR/fake-install" into the literal "/fake-install".
 #
-# Refuses if:
-#   - the path is empty
+# Refuses any of:
+#   - empty path
+#   - non-absolute path (relative paths resolve via $PWD — too risky)
+#   - path is exactly "/" (belt-and-suspenders for the worst case)
+#   - path contains ".." (defends against relative-path bypass)
 #   - TEST_TMPDIR is unset
-#   - the path contains ".." (defends against symlink/relative-path bypass)
-#   - the path isn't TEST_TMPDIR itself or strictly under it
+#   - TEST_TMPDIR is non-absolute
+#   - TEST_TMPDIR is suspiciously short (< 16 chars: rules out "/", "/tmp")
+#   - TEST_TMPDIR doesn't actually exist as a directory
+#   - path isn't TEST_TMPDIR itself or strictly under it
 _test_rm() {
   local path="$1"
+
+  # ── Path-shape checks ──────────────────────────────────────
   if [[ -z "$path" ]]; then
     echo "_test_rm refused: empty path" >&2
     return 1
   fi
-  if [[ -z "${TEST_TMPDIR:-}" ]]; then
-    echo "_test_rm refused: TEST_TMPDIR unset (path=$path)" >&2
+  # Reject relative paths up front. With a relative path, the prefix check
+  # below would compare a $PWD-dependent string against an absolute
+  # TEST_TMPDIR and silently fail — better to reject loudly here.
+  if [[ "$path" != /* ]]; then
+    echo "_test_rm refused: path is not absolute: $path" >&2
+    return 1
+  fi
+  # Even if every other check passed, refuse the literal root.
+  if [[ "$path" == "/" ]]; then
+    echo "_test_rm refused: path is '/'" >&2
     return 1
   fi
   case "$path" in
     *..*) echo "_test_rm refused: path contains '..': $path" >&2; return 1 ;;
   esac
+
+  # ── TEST_TMPDIR sanity ─────────────────────────────────────
+  if [[ -z "${TEST_TMPDIR:-}" ]]; then
+    echo "_test_rm refused: TEST_TMPDIR unset (path=$path)" >&2
+    return 1
+  fi
+  if [[ "$TEST_TMPDIR" != /* ]]; then
+    echo "_test_rm refused: TEST_TMPDIR is not absolute: $TEST_TMPDIR" >&2
+    return 1
+  fi
+  # Real mktemp -d results are 20+ chars on macOS (/var/folders/...) and
+  # ~20 chars on Linux (/tmp/tmp.XXXXXX). Anything under 16 is suspicious
+  # — for example "/" (1) or "/tmp" (4) — and would scope deletion far
+  # too broadly. The threshold is generous to leave room for short tmp
+  # roots while still catching obvious accidents.
+  if [[ "${#TEST_TMPDIR}" -lt 16 ]]; then
+    echo "_test_rm refused: TEST_TMPDIR suspiciously short (${#TEST_TMPDIR} chars): $TEST_TMPDIR" >&2
+    return 1
+  fi
+  # Catches typos and stale state — e.g. if TEST_TMPDIR was already cleaned
+  # up by an earlier teardown but the variable still holds the old path.
+  if [[ ! -d "$TEST_TMPDIR" ]]; then
+    echo "_test_rm refused: TEST_TMPDIR is not a directory: $TEST_TMPDIR" >&2
+    return 1
+  fi
+
+  # ── Final containment check ────────────────────────────────
   if [[ "$path" != "$TEST_TMPDIR" && "$path" != "$TEST_TMPDIR/"* ]]; then
     echo "_test_rm refused: path outside TEST_TMPDIR: $path (TEST_TMPDIR=$TEST_TMPDIR)" >&2
     return 1
   fi
+
   rm -rf "$path"
 }
 
