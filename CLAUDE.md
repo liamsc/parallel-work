@@ -82,6 +82,7 @@ _test_rm "$install_dir"
 `_test_rm` refuses if any of these are true:
 - path is empty, not absolute, exactly `/`, or contains `..`
 - `TEST_TMPDIR` is unset, not absolute, shorter than 16 chars (rules out `/`, `/tmp`, anything too broad), or not an existing directory
+- `TEST_TMPDIR` is missing the sandbox-marker file (`.parallel-work-test-sandbox`) that `setup_test_workspace` drops at creation — proves the directory was made by the test harness, not e.g. a real `~/something` the user has `TEST_TMPDIR` exported to in their shell rc
 - path isn't `TEST_TMPDIR` itself or strictly under it
 
 Rules:

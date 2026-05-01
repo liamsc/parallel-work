@@ -119,6 +119,33 @@ test_test_rm_refuses_nonexistent_tmpdir() {
   teardown_test_workspace
 }
 
+# Description: _test_rm refuses if TEST_TMPDIR points at a real dir we didn't create.
+# The "could-be-anything" attack: a user could have TEST_TMPDIR exported in
+# their shell rc to ~/important — every shape check (length, absolute,
+# exists) passes, but the marker file is missing because setup_test_workspace
+# didn't create it. _test_rm refuses.
+test_test_rm_refuses_unmarked_tmpdir() {
+  setup_test_workspace
+  # Build a real, long, existing directory with NO sandbox marker.
+  local impostor="$TEST_TMPDIR/impostor-pretending-to-be-a-sandbox"
+  mkdir -p "$impostor"
+  echo "user data" > "$impostor/important.txt"
+
+  local output status
+  output=$(TEST_TMPDIR="$impostor" _test_rm "$impostor/important.txt" 2>&1)
+  status=$?
+
+  assert_status_fail "$status" "_test_rm should refuse a TEST_TMPDIR without the marker"
+  assert_contains "$output" "no sandbox marker" "error names the cause"
+  # Sanity: the impostor file we tried to delete is still there.
+  if [[ ! -f "$impostor/important.txt" ]]; then
+    echo "  FAIL: file was deleted despite marker check" >&2
+    teardown_test_workspace
+    return 1
+  fi
+  teardown_test_workspace
+}
+
 # Description: _test_rm refuses if TEST_TMPDIR isn't absolute.
 test_test_rm_refuses_relative_tmpdir() {
   setup_test_workspace

@@ -62,6 +62,13 @@ assert_status_fail() {
 # per-test sandbox. Catches the classic footgun where an unset variable
 # turns "$TEST_TMPDIR/fake-install" into the literal "/fake-install".
 #
+# The "sandbox marker" file is the load-bearing check: shape rules
+# (length, absolute, exists) are necessary but not sufficient — a user
+# could have TEST_TMPDIR exported in their shell rc to a real directory
+# they care about (~/my-stuff). _test_rm requires a sentinel file that
+# only setup_test_workspace creates, so it can only delete directories
+# this test harness made.
+#
 # Refuses any of:
 #   - empty path
 #   - non-absolute path (relative paths resolve via $PWD — too risky)
@@ -71,7 +78,11 @@ assert_status_fail() {
 #   - TEST_TMPDIR is non-absolute
 #   - TEST_TMPDIR is suspiciously short (< 16 chars: rules out "/", "/tmp")
 #   - TEST_TMPDIR doesn't actually exist as a directory
+#   - TEST_TMPDIR is missing the sandbox-marker file (i.e., wasn't
+#     created by setup_test_workspace — could be the user's home dir)
 #   - path isn't TEST_TMPDIR itself or strictly under it
+_TEST_SANDBOX_MARKER='.parallel-work-test-sandbox'
+
 _test_rm() {
   local path="$1"
 
@@ -120,6 +131,13 @@ _test_rm() {
     echo "_test_rm refused: TEST_TMPDIR is not a directory: $TEST_TMPDIR" >&2
     return 1
   fi
+  # Proof-of-ownership: the marker file is dropped by setup_test_workspace
+  # right after mktemp. Without it, we can't tell apart a real test sandbox
+  # from a directory the user happens to have at this path.
+  if [[ ! -f "$TEST_TMPDIR/$_TEST_SANDBOX_MARKER" ]]; then
+    echo "_test_rm refused: TEST_TMPDIR has no sandbox marker — not created by setup_test_workspace: $TEST_TMPDIR" >&2
+    return 1
+  fi
 
   # ── Final containment check ────────────────────────────────
   if [[ "$path" != "$TEST_TMPDIR" && "$path" != "$TEST_TMPDIR/"* ]]; then
@@ -134,6 +152,10 @@ _test_rm() {
 
 setup_test_workspace() {
   TEST_TMPDIR="$(mktemp -d)"
+  # Drop a sandbox-marker file so _test_rm can prove this directory was
+  # created by us. Without this, _test_rm cannot tell our temp dir from a
+  # real directory the user might have set TEST_TMPDIR to.
+  : > "$TEST_TMPDIR/$_TEST_SANDBOX_MARKER"
   TEST_ORIGIN="$TEST_TMPDIR/origin.git"
 
   # Create a bare "origin" repo with one commit
