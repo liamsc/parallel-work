@@ -21,13 +21,22 @@ All code lives in `lib/`:
 | `commands/new.sh` | `p-new` — create the next pN clone |
 | `commands/setup.sh` | `p-setup` — apply statusline + clone config to existing clones |
 | `commands/clean.sh` | `p-clean` — recycle clones whose PR has been merged |
-| `commands/resume.sh` | `p-resume` — pick a recent Claude/Cursor session to resume with bypass permissions |
+| `commands/resume.sh` | `p-resume` — entry point: arg parse, listing build, render, prompt, dispatch (sources everything in `commands/resume/`) |
+| `commands/resume/format.sh` | Generic formatters: `_pwork_resume_truncate`, `_pwork_resume_mtime` (BSD/GNU portable), `_pwork_resume_relative_time` |
+| `commands/resume/claude.sh` | Claude-specific: path encoding, jsonl title extraction, live-session discovery via `~/.claude/sessions/<pid>.json` |
+| `commands/resume/cursor.sh` | Cursor-specific: path encoding, title extraction (strips `<attached_files>`), live PID via `pgrep -f cursor agent` |
+| `commands/resume/collect.sh` | Per-clone aggregation — calls into `claude.sh` + `cursor.sh`, emits TSV rows for sort/slice |
+| `commands/resume/render.sh` | Colored table renderer — live ● marker, `* claude` / `> cursor` glyph + color, hint header |
+| `commands/resume/dispatch.sh` | `_pwork_resume_exec` — pick "focus existing window" vs "launch new" with bypass permissions |
+| `commands/resume/jump/terminal.sh` | `_pwork_jump_pid_tty`, `_pwork_jump_pid_terminal` — ppid walk identifies iterm2/ghostty/terminal/unknown |
+| `commands/resume/jump/iterm2.sh` | `_pwork_jump_focus_iterm2` — precise TTY-based AppleScript focus |
+| `commands/resume/jump/ghostty.sh` | `_pwork_jump_focus_ghostty` — best-effort focus by session name → cwd → activate |
+| `commands/resume/jump/window.sh` | `_pwork_jump_window` orchestrator — glues live-discovery + per-app focus |
 | `commands/update.sh` | `p-update` — update parallel-work to the latest version |
 | `commands/version.sh` | `p-version` — show installed version and git SHA |
 | `commands/list.sh` | `plist` + `yolo` — help listing and alias |
 | `statusline.sh` | Claude Code statusline script — shows clone name, repo, branch, git state, context %, and current task |
 | `clone-setup.sh` | Per-clone setup: symlinks, `CLAUDE.local.md`, statusline settings, git exclude |
-| `window-jump.sh` | Detect a live Claude/Cursor session and focus its iTerm2/Ghostty tab (used by `p-resume`) |
 | `bootstrap.sh` | Workspace initialization — creates and configures N clones |
 | `gh.sh` | GitHub CLI helpers: `_pwork_check_gh`, `_pwork_fetch_pr_branches`, `_pwork_branch_status` |
 | `shell-helpers.sh` | Entry point sourced from `.zshrc` — loads all other lib files, provides `p1`–`pN` functions |
