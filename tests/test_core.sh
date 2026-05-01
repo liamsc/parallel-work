@@ -71,7 +71,7 @@ test_pwork_clones_handles_gaps() {
   create_workspace 3
 
   # Remove p2 to create a gap
-  rm -rf "$TEST_WORKSPACE/p2"
+  _test_rm "$TEST_WORKSPACE/p2"
 
   local result
   result=$(cd "$TEST_WORKSPACE/p1" && _pwork_clones)

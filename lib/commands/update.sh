@@ -14,6 +14,20 @@ p-update() {
     return 1
   fi
 
+  # Refuse to update when the install dir is checked out on something other
+  # than main. Git pull would happily update <branch> from origin/<branch>,
+  # which is silently the wrong thing — the user thinks they got the latest
+  # release but they're still on a stale branch (we hit this exact failure
+  # mode after merging v0.3.0). Clear, actionable error beats silent no-op.
+  local current_branch
+  current_branch=$(git -C "$PWORK_INSTALL_DIR" branch --show-current 2>/dev/null)
+  if [[ "$current_branch" != "main" ]]; then
+    echo "Error: install dir is on branch '$current_branch', not 'main'." >&2
+    echo "  p-update only follows main. Recover with:" >&2
+    echo "    git -C \"\$PWORK_INSTALL_DIR\" checkout main && p-update" >&2
+    return 1
+  fi
+
   local old_version
   old_version="$(_pwork_version)"
 
