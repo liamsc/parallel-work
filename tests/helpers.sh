@@ -57,6 +57,36 @@ assert_status_fail() {
   fi
 }
 
+# ── Safer rm for tests ───────────────────────────────────────
+# Wraps `rm -rf` with guards that refuse to delete anything outside the
+# per-test sandbox. Catches the classic footgun where an unset variable
+# turns "$TEST_TMPDIR/fake-install" into the literal "/fake-install".
+#
+# Refuses if:
+#   - the path is empty
+#   - TEST_TMPDIR is unset
+#   - the path contains ".." (defends against symlink/relative-path bypass)
+#   - the path isn't TEST_TMPDIR itself or strictly under it
+_test_rm() {
+  local path="$1"
+  if [[ -z "$path" ]]; then
+    echo "_test_rm refused: empty path" >&2
+    return 1
+  fi
+  if [[ -z "${TEST_TMPDIR:-}" ]]; then
+    echo "_test_rm refused: TEST_TMPDIR unset (path=$path)" >&2
+    return 1
+  fi
+  case "$path" in
+    *..*) echo "_test_rm refused: path contains '..': $path" >&2; return 1 ;;
+  esac
+  if [[ "$path" != "$TEST_TMPDIR" && "$path" != "$TEST_TMPDIR/"* ]]; then
+    echo "_test_rm refused: path outside TEST_TMPDIR: $path (TEST_TMPDIR=$TEST_TMPDIR)" >&2
+    return 1
+  fi
+  rm -rf "$path"
+}
+
 # ── Workspace fixtures ───────────────────────────────────────
 
 setup_test_workspace() {
@@ -74,7 +104,7 @@ setup_test_workspace() {
     git commit --allow-empty -m "init" >/dev/null 2>&1
     git push >/dev/null 2>&1
   )
-  rm -rf "$seed"
+  _test_rm "$seed"
 
   export PWORK_INSTALL_DIR="$SCRIPT_DIR"
   source "$PWORK_INSTALL_DIR/lib/shell-helpers.sh"
@@ -83,7 +113,7 @@ setup_test_workspace() {
 }
 
 teardown_test_workspace() {
-  rm -rf "$TEST_TMPDIR"
+  _test_rm "$TEST_TMPDIR"
 }
 
 # Create a fully bootstrapped workspace with N clones.
