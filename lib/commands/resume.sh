@@ -93,6 +93,13 @@ _pwork_resume_title_cursor() {
   _pwork_resume_truncate "$t"
 }
 
+# File mtime as epoch seconds. Tries BSD stat (-f %m, macOS) first, falls
+# back to GNU stat (-c %Y, Linux). Echoes nothing if both fail, so callers
+# can guard with `[[ -z "$mt" ]] && continue`.
+_pwork_resume_mtime() {
+  stat -f %m "$1" 2>/dev/null || stat -c %Y "$1" 2>/dev/null
+}
+
 # Format an epoch-seconds delta as "Xs/m/h/d ago". Pure shell math so we don't
 # depend on GNU date (macOS ships BSD date).
 _pwork_resume_relative_time() {
@@ -122,8 +129,9 @@ _pwork_resume_collect_clone() {
   for f in "$claude_root/$enc"/*.jsonl; do
     # An unmatched glob expands to its literal pattern — guard with -f.
     [[ -f "$f" ]] || continue
-    # stat -f %m is the BSD/macOS form of "epoch mtime"; -c %Y is GNU.
-    mt=$(stat -f %m "$f" 2>/dev/null) || continue
+    # _pwork_resume_mtime probes BSD vs GNU stat — works on macOS and Linux.
+    mt=$(_pwork_resume_mtime "$f")
+    [[ -z "$mt" ]] && continue
     id="$(basename "$f" .jsonl)"
     title="$(_pwork_resume_title_claude "$f")"
     printf '%s\t%s\t%s\t%s\t%s\n' "$mt" "$clone_name" "claude" "$id" "$title"
@@ -133,7 +141,8 @@ _pwork_resume_collect_clone() {
   enc="$(_pwork_resume_encode_cursor "$clone_path")"
   for f in "$cursor_root/$enc/agent-transcripts"/*/*.jsonl; do
     [[ -f "$f" ]] || continue
-    mt=$(stat -f %m "$f" 2>/dev/null) || continue
+    mt=$(_pwork_resume_mtime "$f")
+    [[ -z "$mt" ]] && continue
     # The agent-id is the parent directory name.
     id="$(basename "$(dirname "$f")")"
     title="$(_pwork_resume_title_cursor "$f")"
