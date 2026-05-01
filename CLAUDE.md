@@ -209,4 +209,45 @@ When writing or reviewing code, ask:
 2. **Can I inline this?** — If a helper is only called once and is short, inline it.
 3. **Would a new reader understand this in 10 seconds?** — If not, add a comment explaining *why* or simplify the logic.
 4. **Am I adding a flag/option nobody asked for?** — Don't build for hypothetical future use.
-5. **Does this file do one thing?** — If it's growing beyond ~150 lines, consider splitting by responsibility (see `lib/` layout).
+5. **Does this file do one thing?** — If it's growing beyond ~150 lines, split it into a sub-folder of small modules (see "Splitting a growing command" below).
+
+### Splitting a growing command
+
+Once a `commands/<name>.sh` file passes ~150 lines or starts mixing concerns (encoding + dispatch + rendering + integration with another tool), break it apart so a reader can scan the layout and grasp intent quickly. `commands/resume.sh` is the canonical example — follow its shape.
+
+**Layout:**
+
+```
+lib/commands/<name>.sh                # public entry point: arg parsing + main flow
+lib/commands/<name>/
+├── format.sh                         # pure helpers (no domain knowledge)
+├── <tool-a>.sh                       # everything that knows about tool A's on-disk format
+├── <tool-b>.sh                       # everything that knows about tool B's on-disk format
+├── collect.sh                        # orchestration that calls the tool-specific files
+├── render.sh                         # presentation only (printf, ANSI codes)
+├── dispatch.sh                       # boundary between "user picked X" and "do X"
+└── <subgroup>/                       # nest one level when a sub-concern has 3+ files
+    ├── … per-piece files …
+    └── <subgroup>.sh                 # orchestrator for that sub-concern
+```
+
+**Module shape (rules of thumb):**
+
+- **≤ 80 lines per internal file.** If a module passes that, look for a sub-concern to split out further.
+- **Lead each file with a 3–6 line header** explaining (1) what it does, (2) which functions it exports, (3) why it exists in the bigger picture. A new reader should pick up intent in seconds without opening other files.
+- **Tool-specific code goes in tool-named files** (`claude.sh`, `cursor.sh`, …). Adding a new tool becomes "copy `<tool-a>.sh` and tweak", not a hunt through a monolith.
+- **No file does two things.** Encoding, title extraction, and live-process detection for one tool can share a file (they're all "knows tool A's format"). Encoding for tool A and rendering both tools is two things — split.
+- **Source order matters.** In the entry-point file, source helpers before consumers. The `commands/resume.sh` order — `format → claude/cursor → jump → collect/render/dispatch` — is a good template: pure helpers first, tool-specific next, orchestrators last.
+- **Keep the public entry point thin.** It owns arg parsing, the main control flow, and the call sites for the modules. It does not own implementation details.
+- **Internals stay private to the command.** Don't source them from elsewhere; the entry-point file is the only place that knows the layout. If another command needs the same helper, promote it to `lib/<name>.sh` (top-level) — but only when there's a real second caller, not a hypothetical one.
+
+**Procedure to split an existing command:**
+
+1. Identify the responsibilities. Group related functions; one group per file.
+2. Create `commands/<name>/` and add files in dependency order (helpers first).
+3. Each file gets its header comment and only the functions in its group.
+4. The entry-point file shrinks to: source lines (in dependency order), arg parsing, main flow, and any glue too small to extract.
+5. Run the test suite — function names are the API contract, so tests should pass without changes.
+6. Update the `lib/` table at the top of `CLAUDE.md` so future readers see the new layout.
+
+The point is not "more files" — it's that each file answers one question. A reader scanning `commands/<name>/` should be able to predict what each file contains from its name alone.
