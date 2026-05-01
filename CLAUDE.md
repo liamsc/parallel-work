@@ -21,6 +21,17 @@ All code lives in `lib/`:
 | `commands/new.sh` | `p-new` — create the next pN clone |
 | `commands/setup.sh` | `p-setup` — apply statusline + clone config to existing clones |
 | `commands/clean.sh` | `p-clean` — recycle clones whose PR has been merged |
+| `commands/resume.sh` | `p-resume` — entry point: arg parse, listing build, render, prompt, dispatch (sources everything in `commands/resume/`) |
+| `commands/resume/format.sh` | Generic formatters: `_pwork_resume_truncate`, `_pwork_resume_mtime` (BSD/GNU portable), `_pwork_resume_relative_time` |
+| `commands/resume/claude.sh` | Claude-specific: path encoding, jsonl title extraction, live-session discovery via `~/.claude/sessions/<pid>.json` |
+| `commands/resume/cursor.sh` | Cursor-specific: path encoding, title extraction (strips `<attached_files>`), live PID via `pgrep -f cursor agent` |
+| `commands/resume/collect.sh` | Per-clone aggregation — calls into `claude.sh` + `cursor.sh`, emits TSV rows for sort/slice |
+| `commands/resume/render.sh` | Colored table renderer — live ● marker, `* claude` / `> cursor` glyph + color, hint header |
+| `commands/resume/dispatch.sh` | `_pwork_resume_exec` — pick "focus existing window" vs "launch new" with bypass permissions |
+| `commands/resume/jump/terminal.sh` | `_pwork_jump_pid_tty`, `_pwork_jump_pid_terminal` — ppid walk identifies iterm2/ghostty/terminal/unknown |
+| `commands/resume/jump/iterm2.sh` | `_pwork_jump_focus_iterm2` — precise TTY-based AppleScript focus |
+| `commands/resume/jump/ghostty.sh` | `_pwork_jump_focus_ghostty` — best-effort focus by session name → cwd → activate |
+| `commands/resume/jump/window.sh` | `_pwork_jump_window` orchestrator — glues live-discovery + per-app focus |
 | `commands/update.sh` | `p-update` — update parallel-work to the latest version |
 | `commands/version.sh` | `p-version` — show installed version and git SHA |
 | `commands/list.sh` | `plist` + `yolo` — help listing and alias |
@@ -43,6 +54,7 @@ All code lives in `lib/`:
 | `p-new` | Create the next pN clone |
 | `p-setup` | Apply statusline + clone config to all existing clones |
 | `p-clean [pN]` | Recycle clones whose PR has been merged |
+| `p-resume [N] [pN]` | List recent Claude/Cursor sessions across clones; focus an open window (iTerm2/Ghostty) or launch a new resume with bypass permissions |
 | `p-update` | Update parallel-work to the latest version |
 | `p-version` | Show installed version and git SHA |
 | `plist` | List all commands |
@@ -93,9 +105,45 @@ rm -rf /tmp/test-clone
 - Config: `.parallel-work/pwork.conf` at workspace root, sourced to set `PWORK_*` variables
 - Each clone gets `.claude/CLAUDE.local.md` (git-excluded)
 
+## Don't commit personal paths
+
+Anything that lands in git history is effectively permanent — public PRs expose the path, force-pushes don't always fully erase it, and surgical history rewrites are a hassle. **Scan staged changes for user-specific paths before every commit, including in tests, fixtures, comments, and docs.**
+
+Common offenders:
+- `/Users/<your-username>/...` (macOS home dirs)
+- `/home/<your-username>/...` (Linux home dirs)
+- `/private/var/folders/<user-keyed>/...` (macOS temp dirs)
+- Workspace paths that include your username or company (`/Users/alice/work/internal-project`)
+- And any encoded variant of the above (e.g. Claude's `-Users-alice-...` flavor of `/Users/alice/...`)
+
+This applies to any committed file — test fixtures, doc tables, header comments, screenshots — not just source code. Don't reference your real paths in `CLAUDE.md` either; use placeholders.
+
+Use placeholders that exercise the same shape but don't identify you:
+- `/Users/me/...`, `/Users/test-user/...`
+- `~/test-data/...`
+- `/tmp/fixture/...`
+
+**Pre-commit check** (run before `git commit`):
+
+```bash
+git diff --cached | grep -nE '^\+.*(/Users/|/home/|/private/var/folders/)' \
+  | grep -vE '/(Users|home)/(me|test|test-user|fixture)\b' \
+  && echo "✗ user-path candidate above — replace with a placeholder" \
+  || echo "✓ no user paths in staged changes"
+```
+
+If a leak slips in:
+1. **Don't just `git commit --amend`** — the leak is still in earlier commits on the branch.
+2. Scrub every commit on the branch with `git filter-branch --tree-filter` (or `git filter-repo`), verify with `git log <base>..HEAD -p | grep <leak-pattern>`, then `git push --force-with-lease`.
+3. After force-push, expire reflog and `git gc --prune=now` locally; on GitHub the orphaned commit objects can still be reached by direct SHA URL for up to ~30 days. For *sensitive* leaks (tokens, secrets, internal hostnames), rotate the underlying value — don't rely on rewrite alone.
+
 ## Code style
 
 Keep code simple, readable, and small. Add comments that explain the **why** and **how**, not just the what.
+
+**Expand acronyms on first use.** When an acronym appears in a comment, doc, or commit message, write it out alongside the short form the first time it shows up so a reader doesn't have to guess. Examples: "TSV (tab-separated values)", "PID (process id)", "TTY (controlling terminal)", "PR (pull request)". Subsequent uses in the same file/section can use the short form alone.
+
+**Use descriptive variable names.** Prefer `session_file` over `f`, `mtime` over `mt`, `encoded_dir` over `enc`, `session_id` over `id`. Don't pile a row of two-letter `local` declarations at the top of a function — by the time the reader reaches the loop body, they've forgotten which is which. Single-letter names are only OK for tiny, throwaway loop variables where the type is obvious from one line away (e.g. `for d in "$root"/p[0-9]*`). When in doubt, type the extra characters.
 
 ### Good examples
 
@@ -197,4 +245,45 @@ When writing or reviewing code, ask:
 2. **Can I inline this?** — If a helper is only called once and is short, inline it.
 3. **Would a new reader understand this in 10 seconds?** — If not, add a comment explaining *why* or simplify the logic.
 4. **Am I adding a flag/option nobody asked for?** — Don't build for hypothetical future use.
-5. **Does this file do one thing?** — If it's growing beyond ~150 lines, consider splitting by responsibility (see `lib/` layout).
+5. **Does this file do one thing?** — If it's growing beyond ~150 lines, split it into a sub-folder of small modules (see "Splitting a growing command" below).
+
+### Splitting a growing command
+
+Once a `commands/<name>.sh` file passes ~150 lines or starts mixing concerns (encoding + dispatch + rendering + integration with another tool), break it apart so a reader can scan the layout and grasp intent quickly. `commands/resume.sh` is the canonical example — follow its shape.
+
+**Layout:**
+
+```
+lib/commands/<name>.sh                # public entry point: arg parsing + main flow
+lib/commands/<name>/
+├── format.sh                         # pure helpers (no domain knowledge)
+├── <tool-a>.sh                       # everything that knows about tool A's on-disk format
+├── <tool-b>.sh                       # everything that knows about tool B's on-disk format
+├── collect.sh                        # orchestration that calls the tool-specific files
+├── render.sh                         # presentation only (printf, ANSI codes)
+├── dispatch.sh                       # boundary between "user picked X" and "do X"
+└── <subgroup>/                       # nest one level when a sub-concern has 3+ files
+    ├── … per-piece files …
+    └── <subgroup>.sh                 # orchestrator for that sub-concern
+```
+
+**Module shape (rules of thumb):**
+
+- **≤ 80 lines per internal file.** If a module passes that, look for a sub-concern to split out further.
+- **Lead each file with a 3–6 line header** explaining (1) what it does, (2) which functions it exports, (3) why it exists in the bigger picture. A new reader should pick up intent in seconds without opening other files.
+- **Tool-specific code goes in tool-named files** (`claude.sh`, `cursor.sh`, …). Adding a new tool becomes "copy `<tool-a>.sh` and tweak", not a hunt through a monolith.
+- **No file does two things.** Encoding, title extraction, and live-process detection for one tool can share a file (they're all "knows tool A's format"). Encoding for tool A and rendering both tools is two things — split.
+- **Source order matters.** In the entry-point file, source helpers before consumers. The `commands/resume.sh` order — `format → claude/cursor → jump → collect/render/dispatch` — is a good template: pure helpers first, tool-specific next, orchestrators last.
+- **Keep the public entry point thin.** It owns arg parsing, the main control flow, and the call sites for the modules. It does not own implementation details.
+- **Internals stay private to the command.** Don't source them from elsewhere; the entry-point file is the only place that knows the layout. If another command needs the same helper, promote it to `lib/<name>.sh` (top-level) — but only when there's a real second caller, not a hypothetical one.
+
+**Procedure to split an existing command:**
+
+1. Identify the responsibilities. Group related functions; one group per file.
+2. Create `commands/<name>/` and add files in dependency order (helpers first).
+3. Each file gets its header comment and only the functions in its group.
+4. The entry-point file shrinks to: source lines (in dependency order), arg parsing, main flow, and any glue too small to extract.
+5. Run the test suite — function names are the API contract, so tests should pass without changes.
+6. Update the `lib/` table at the top of `CLAUDE.md` so future readers see the new layout.
+
+The point is not "more files" — it's that each file answers one question. A reader scanning `commands/<name>/` should be able to predict what each file contains from its name alone.
