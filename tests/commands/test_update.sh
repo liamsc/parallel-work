@@ -14,8 +14,11 @@ test_p_update_fails_when_install_dir_unset() {
 
 # Description: p-update fails when PWORK_INSTALL_DIR is not a git repository.
 test_p_update_fails_when_not_a_git_repo() {
-  local tmpdir
-  tmpdir="$(mktemp -d)"
+  # Use the standard sandbox so cleanup goes through teardown_test_workspace
+  # → _test_rm; no independent mktemp that the safety helper can't validate.
+  setup_test_workspace
+  local tmpdir="$TEST_TMPDIR/not-a-git-repo"
+  mkdir -p "$tmpdir"
 
   local output
   output=$(PWORK_INSTALL_DIR="$tmpdir" p-update 2>&1)
@@ -24,7 +27,7 @@ test_p_update_fails_when_not_a_git_repo() {
   assert_status_fail "$status" "p-update exits non-zero for non-git dir"
   assert_contains "$output" "not a git repo" "p-update error mentions not a git repo"
 
-  rm -rf "$tmpdir"
+  teardown_test_workspace
 }
 
 # Description: p-update runs git pull and re-sources shell-helpers successfully.
@@ -54,7 +57,39 @@ test_p_update_pulls_and_reloads() {
   assert_contains "$output" "Updating parallel-work" "p-update prints updating message"
   assert_contains "$output" "Done!" "p-update prints done message"
 
-  rm -rf "$install_dir"
+  _test_rm "$install_dir"
+  teardown_test_workspace
+}
+
+# Description: p-update refuses to run when the install dir is checked out on a non-main branch.
+test_p_update_fails_on_non_main_branch() {
+  setup_test_workspace
+
+  # Build a fake install dir like the other tests, but check out a feature
+  # branch in it before invoking p-update. We expect a clear error and
+  # exit non-zero — not a silent "Done!" with no actual update.
+  local install_dir="$TEST_TMPDIR/fake-install"
+  git clone "$TEST_ORIGIN" "$install_dir" >/dev/null 2>&1
+  (
+    cd "$install_dir"
+    git config user.email "test@test.com"
+    git config user.name "Test"
+    git checkout -b fix/some-feature >/dev/null 2>&1
+  )
+  cp "$PWORK_INSTALL_DIR/install.sh" "$install_dir/"
+  cp "$PWORK_INSTALL_DIR/VERSION" "$install_dir/"
+  cp -R "$PWORK_INSTALL_DIR/lib" "$install_dir/lib"
+
+  local output status
+  output=$(HOME="$TEST_TMPDIR" PWORK_INSTALL_DIR="$install_dir" p-update 2>&1)
+  status=$?
+
+  assert_status_fail "$status" "p-update exits non-zero on a non-main branch"
+  assert_contains "$output" "fix/some-feature" "error mentions the actual branch name"
+  assert_contains "$output" "checkout main" "error tells user how to recover"
+  assert_not_contains "$output" "Done!" "p-update doesn't claim success on failure"
+
+  _test_rm "$install_dir"
   teardown_test_workspace
 }
 
@@ -94,7 +129,7 @@ test_p_update_shows_version_transition() {
     git add VERSION && git commit -m "bump version" >/dev/null 2>&1
     git push >/dev/null 2>&1
   )
-  rm -rf "$bump_dir"
+  _test_rm "$bump_dir"
 
   local output
   # Override HOME so install.sh writes to a throwaway rc file instead of the real ~/.zshrc
@@ -104,6 +139,6 @@ test_p_update_shows_version_transition() {
   assert_status_ok "$status" "p-update succeeds with version bump"
   assert_contains "$output" "0.1.0 -> 0.2.0" "p-update shows version transition"
 
-  rm -rf "$install_dir"
+  _test_rm "$install_dir"
   teardown_test_workspace
 }

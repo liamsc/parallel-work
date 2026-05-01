@@ -211,7 +211,7 @@ _setup_second_workspace() {
     git commit --allow-empty -m "init" >/dev/null 2>&1
     git push >/dev/null 2>&1
   )
-  rm -rf "$seed"
+  _test_rm "$seed"
 
   TEST_WORKSPACE_2="$TEST_TMPDIR/workspace2"
   mkdir -p "$TEST_WORKSPACE_2/.parallel-work"

@@ -78,8 +78,10 @@ test_p_setup_fails_outside_workspace() {
   status=$?
 
   assert_status_fail "$status" "p-setup fails outside a workspace"
-
-  teardown_test_workspace
+  # No teardown_test_workspace here — this test doesn't call
+  # setup_test_workspace, so there's no per-test sandbox to remove.
+  # _test_rm correctly refuses to clean up a stale (already-removed)
+  # TEST_TMPDIR left over from a previous test.
 }
 
 # Description: p-setup updates a stale statusLine.command path to the current

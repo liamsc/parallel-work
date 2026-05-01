@@ -71,6 +71,27 @@ All code lives in `lib/`:
 - Tests run in subshells; stdout is suppressed, stderr shown on failure
 - Every test function must have a `# Description:` comment above it explaining what the test verifies
 
+### Never use bare `rm -rf` in tests
+
+If a path variable is ever empty (setup failed mid-way, copy/paste typo, conditional that didn't set the var on every branch), `rm -rf "$some_var/fake-install"` silently becomes `rm -rf "/fake-install"` — running against the real filesystem. Route every cleanup through `_test_rm` from `tests/helpers.sh`:
+
+```bash
+_test_rm "$install_dir"
+```
+
+`_test_rm` refuses if any of these are true:
+- path is empty, not absolute, exactly `/`, or contains `..`
+- `TEST_TMPDIR` is unset, not absolute, shorter than 16 chars (rules out `/`, `/tmp`, anything too broad), or not an existing directory
+- `TEST_TMPDIR` is missing the sandbox-marker file (`.parallel-work-test-sandbox`) that `setup_test_workspace` drops at creation — proves the directory was made by the test harness, not e.g. a real `~/something` the user has `TEST_TMPDIR` exported to in their shell rc
+- path isn't `TEST_TMPDIR` itself or strictly under it
+
+Rules:
+
+- Any path you want to delete inside a test must be `$TEST_TMPDIR` itself or strictly under it.
+- If a test reaches for `mktemp -d` independently, restructure it to put the temp dir under `$TEST_TMPDIR` (call `setup_test_workspace` first). The safety helper can only validate paths inside the sandbox.
+- `_test_rm` itself is covered by `tests/test_helpers.sh` — those tests pin the refusal behavior so a future change can't silently weaken the guard.
+- Sanity-grep before opening a PR: `grep -rn 'rm -rf' tests/` should only return hits inside `_test_rm`'s own implementation.
+
 ## Manual testing
 
 To test `_pwork_setup_clone` without creating a full workspace:
