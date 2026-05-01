@@ -66,7 +66,13 @@ _pwork_jump_live_claude_sessions() {
     cwd=$(jq -r  '.cwd // ""'       "$f" 2>/dev/null)
     name=$(jq -r '.name // ""'      "$f" 2>/dev/null)
     [[ -z "$sid" || -z "$pid" ]] && continue
-    # kill -0 sends signal 0 — fails iff the pid doesn't exist.
+    # Liveness probe: signal 0 is a "null" signal — kill performs all the
+    # usual permission/existence checks but never actually delivers
+    # anything to the target. So `kill -0 <pid>` exits 0 when the pid is
+    # alive (and we can signal it) and non-zero when it's gone, which is
+    # exactly what we want to filter out stale ~/.claude/sessions/*.json
+    # files left behind by crashed/exited Claude processes. 2>/dev/null
+    # swallows the "No such process" stderr on the failure path.
     kill -0 "$pid" 2>/dev/null || continue
     printf '%s\t%s\t%s\t%s\n' "$sid" "$pid" "$cwd" "$name"
   done
