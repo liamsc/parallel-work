@@ -58,6 +58,38 @@ test_p_update_pulls_and_reloads() {
   teardown_test_workspace
 }
 
+# Description: p-update refuses to run when the install dir is checked out on a non-main branch.
+test_p_update_fails_on_non_main_branch() {
+  setup_test_workspace
+
+  # Build a fake install dir like the other tests, but check out a feature
+  # branch in it before invoking p-update. We expect a clear error and
+  # exit non-zero — not a silent "Done!" with no actual update.
+  local install_dir="$TEST_TMPDIR/fake-install"
+  git clone "$TEST_ORIGIN" "$install_dir" >/dev/null 2>&1
+  (
+    cd "$install_dir"
+    git config user.email "test@test.com"
+    git config user.name "Test"
+    git checkout -b fix/some-feature >/dev/null 2>&1
+  )
+  cp "$PWORK_INSTALL_DIR/install.sh" "$install_dir/"
+  cp "$PWORK_INSTALL_DIR/VERSION" "$install_dir/"
+  cp -R "$PWORK_INSTALL_DIR/lib" "$install_dir/lib"
+
+  local output status
+  output=$(HOME="$TEST_TMPDIR" PWORK_INSTALL_DIR="$install_dir" p-update 2>&1)
+  status=$?
+
+  assert_status_fail "$status" "p-update exits non-zero on a non-main branch"
+  assert_contains "$output" "fix/some-feature" "error mentions the actual branch name"
+  assert_contains "$output" "checkout main" "error tells user how to recover"
+  assert_not_contains "$output" "Done!" "p-update doesn't claim success on failure"
+
+  rm -rf "$install_dir"
+  teardown_test_workspace
+}
+
 # Description: p-update shows "old -> new" version transition when VERSION changes.
 test_p_update_shows_version_transition() {
   setup_test_workspace
