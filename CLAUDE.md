@@ -111,6 +111,8 @@ Keep code simple, readable, and small. Add comments that explain the **why** and
 
 **Expand acronyms on first use.** When an acronym appears in a comment, doc, or commit message, write it out alongside the short form the first time it shows up so a reader doesn't have to guess. Examples: "TSV (tab-separated values)", "PID (process id)", "TTY (controlling terminal)", "PR (pull request)". Subsequent uses in the same file/section can use the short form alone.
 
+**Use descriptive variable names.** Prefer `session_file` over `f`, `mtime` over `mt`, `encoded_dir` over `enc`, `session_id` over `id`. Don't pile a row of two-letter `local` declarations at the top of a function — by the time the reader reaches the loop body, they've forgotten which is which. Single-letter names are only OK for tiny, throwaway loop variables where the type is obvious from one line away (e.g. `for d in "$root"/p[0-9]*`). When in doubt, type the extra characters.
+
 ### Good examples
 
 ```bash
