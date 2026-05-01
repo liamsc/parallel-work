@@ -105,6 +105,38 @@ rm -rf /tmp/test-clone
 - Config: `.parallel-work/pwork.conf` at workspace root, sourced to set `PWORK_*` variables
 - Each clone gets `.claude/CLAUDE.local.md` (git-excluded)
 
+## Don't commit personal paths
+
+Anything that lands in git history is effectively permanent — public PRs expose the path, force-pushes don't always fully erase it, and surgical history rewrites are a hassle. **Scan staged changes for user-specific paths before every commit, including in tests, fixtures, comments, and docs.**
+
+Common offenders:
+- `/Users/<your-username>/...` (macOS home dirs)
+- `/home/<your-username>/...` (Linux home dirs)
+- `/private/var/folders/<user-keyed>/...` (macOS temp dirs)
+- Workspace paths that include your username or company (`/Users/alice/work/internal-project`)
+- And any encoded variant of the above (e.g. Claude's `-Users-alice-...` flavor of `/Users/alice/...`)
+
+This applies to any committed file — test fixtures, doc tables, header comments, screenshots — not just source code. Don't reference your real paths in `CLAUDE.md` either; use placeholders.
+
+Use placeholders that exercise the same shape but don't identify you:
+- `/Users/me/...`, `/Users/test-user/...`
+- `~/test-data/...`
+- `/tmp/fixture/...`
+
+**Pre-commit check** (run before `git commit`):
+
+```bash
+git diff --cached | grep -nE '^\+.*(/Users/|/home/|/private/var/folders/)' \
+  | grep -vE '/(Users|home)/(me|test|test-user|fixture)\b' \
+  && echo "✗ user-path candidate above — replace with a placeholder" \
+  || echo "✓ no user paths in staged changes"
+```
+
+If a leak slips in:
+1. **Don't just `git commit --amend`** — the leak is still in earlier commits on the branch.
+2. Scrub every commit on the branch with `git filter-branch --tree-filter` (or `git filter-repo`), verify with `git log <base>..HEAD -p | grep <leak-pattern>`, then `git push --force-with-lease`.
+3. After force-push, expire reflog and `git gc --prune=now` locally; on GitHub the orphaned commit objects can still be reached by direct SHA URL for up to ~30 days. For *sensitive* leaks (tokens, secrets, internal hostnames), rotate the underlying value — don't rely on rewrite alone.
+
 ## Code style
 
 Keep code simple, readable, and small. Add comments that explain the **why** and **how**, not just the what.
