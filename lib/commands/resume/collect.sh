@@ -19,9 +19,16 @@ _pwork_resume_collect_clone() {
   # Claude: one .jsonl per session, directly under the encoded dir.
   encoded_dir="$(_pwork_resume_encode_claude "$clone_path")"
   for session_file in "$claude_root/$encoded_dir"/*.jsonl; do
-    # An unmatched glob expands to its literal pattern — guard with -f.
+    # Glob guard: when bash finds no matches it leaves the literal pattern
+    # in $session_file (zsh has nullglob default-off too). `[[ -f X ]]` is
+    # true iff X exists and is a regular file, so this skips the literal
+    # pattern and any non-file entries. `|| continue` runs continue when
+    # the test fails (i.e. skip this iteration).
     [[ -f "$session_file" ]] || continue
     mtime=$(_pwork_resume_mtime "$session_file")
+    # `[[ -z X ]]` is true iff X is the empty string. _pwork_resume_mtime
+    # returns "" on stat failure (deleted between glob and stat, perms,
+    # etc.), so skip rows we can't sort by time.
     [[ -z "$mtime" ]] && continue
     session_id="$(basename "$session_file" .jsonl)"
     title="$(_pwork_resume_title_claude "$session_file")"
@@ -31,6 +38,9 @@ _pwork_resume_collect_clone() {
   # Cursor: <encoded>/agent-transcripts/<uuid>/<uuid>.jsonl
   encoded_dir="$(_pwork_resume_encode_cursor "$clone_path")"
   for session_file in "$cursor_root/$encoded_dir/agent-transcripts"/*/*.jsonl; do
+    # Same two guards as the Claude loop above:
+    #   -f → skip unmatched-glob literal + non-files
+    #   -z → skip rows whose mtime we couldn't read
     [[ -f "$session_file" ]] || continue
     mtime=$(_pwork_resume_mtime "$session_file")
     [[ -z "$mtime" ]] && continue
