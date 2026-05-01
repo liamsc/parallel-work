@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Per-clone session aggregation. Calls into claude.sh and cursor.sh; emits
-# one TSV row per session so the entry point can sort+slice across all
-# clones in a single pass.
+# one TSV (tab-separated values) row per session so the entry point can
+# sort+slice across all clones in a single pass.
 #
 # Output format (5 fields, tab-separated):
 #   <mtime>\t<clone>\t<tool>\t<session-id>\t<title>

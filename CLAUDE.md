@@ -109,6 +109,8 @@ rm -rf /tmp/test-clone
 
 Keep code simple, readable, and small. Add comments that explain the **why** and **how**, not just the what.
 
+**Expand acronyms on first use.** When an acronym appears in a comment, doc, or commit message, write it out alongside the short form the first time it shows up so a reader doesn't have to guess. Examples: "TSV (tab-separated values)", "PID (process id)", "TTY (controlling terminal)", "PR (pull request)". Subsequent uses in the same file/section can use the short form alone.
+
 ### Good examples
 
 ```bash
