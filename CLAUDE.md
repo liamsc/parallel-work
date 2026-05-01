@@ -76,9 +76,13 @@ All code lives in `lib/`:
 If a path variable is ever empty (setup failed mid-way, copy/paste typo, conditional that didn't set the var on every branch), `rm -rf "$some_var/fake-install"` silently becomes `rm -rf "/fake-install"` — running against the real filesystem. Route every cleanup through `_test_rm` from `tests/helpers.sh`:
 
 ```bash
-_test_rm "$install_dir"   # refuses empty paths, unset $TEST_TMPDIR,
-                          # paths with '..', or anything not under $TEST_TMPDIR
+_test_rm "$install_dir"
 ```
+
+`_test_rm` refuses if any of these are true:
+- path is empty, not absolute, exactly `/`, or contains `..`
+- `TEST_TMPDIR` is unset, not absolute, shorter than 16 chars (rules out `/`, `/tmp`, anything too broad), or not an existing directory
+- path isn't `TEST_TMPDIR` itself or strictly under it
 
 Rules:
 
