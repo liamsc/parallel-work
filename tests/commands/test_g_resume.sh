@@ -424,6 +424,34 @@ test_g_resume_invalid_limit_fails() {
   teardown_test_workspace
 }
 
+# Description: where_label produces clean output under zsh (no typeset-echo leakage).
+# Bug: zsh's `local` is `typeset`. Re-declaring a variable that's already
+# local in the same function scope makes zsh echo "name=''" to stdout —
+# which corrupts the function's return value when captured via $(...).
+# This test runs the function under zsh and asserts the output is
+# exactly "p1" with no extra lines.
+test_g_resume_where_label_clean_under_zsh() {
+  if ! command -v zsh &>/dev/null; then return 0; fi
+
+  setup_test_workspace
+  create_workspace 2
+  _g_resume_setup
+  _pwork_register "$TEST_WORKSPACE"
+
+  local output
+  output=$(zsh -c "
+    export PWORK_INSTALL_DIR='$PWORK_INSTALL_DIR'
+    _PWORK_REGISTRY='$_PWORK_REGISTRY'
+    source '$PWORK_INSTALL_DIR/lib/shell-helpers.sh'
+    _pwork_resume_where_label '$TEST_WORKSPACE/p1'
+  " 2>&1)
+
+  assert_eq "p1" "$output" "where_label returns just p1 under zsh"
+
+  _g_resume_teardown
+  teardown_test_workspace
+}
+
 # Description: g-resume with no sessions reports "No sessions found" and exits non-zero.
 test_g_resume_empty_when_no_sessions() {
   setup_test_workspace

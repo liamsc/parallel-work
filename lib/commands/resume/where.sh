@@ -28,10 +28,15 @@ _pwork_resume_where_label() {
     return 0
   fi
 
+  # All locals declared up-front. zsh's `local` is `typeset`, and
+  # re-declaring a variable that's already local in the same scope causes
+  # zsh to echo "name=''" to stdout — which would corrupt our return
+  # value. Declare each local exactly once.
+  local ws best=""
+
   # Lazy-load the workspace list. _PWORK_RESUME_WS_LOADED guards the cache.
   if [[ -z "${_PWORK_RESUME_WS_LOADED:-}" ]]; then
     _PWORK_RESUME_WS_LIST=()
-    local ws
     while IFS= read -r ws; do
       [[ -n "$ws" ]] && _PWORK_RESUME_WS_LIST+=("$ws")
     done < <(_pwork_list_workspaces 2>/dev/null)
@@ -40,7 +45,6 @@ _pwork_resume_where_label() {
 
   # Longest-prefix match against workspace roots so a workspace nested
   # inside another (rare but possible) resolves to the deeper one.
-  local best="" ws
   for ws in "${_PWORK_RESUME_WS_LIST[@]}"; do
     # Match either "$ws" exactly or "$ws/..." (avoid "$wsX" false matches).
     if [[ "$cwd" == "$ws" || "$cwd" == "$ws"/* ]]; then
