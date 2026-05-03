@@ -64,6 +64,17 @@ _pwork_resume_recover_cwd_cursor() {
     path="$(dirname "$path")"
   done
   [[ "$path" == "/" ]] && return 0
+
+  # Floor: refuse anything shallower than $HOME's depth. Catches the case
+  # where a transcript references a path from another machine (a user dir
+  # that doesn't exist locally) and the walk-up lands at /Users or /home —
+  # those are real directories but useless as session identifiers.
+  # ${var//pat/} strips characters; we keep only the / chars and compare
+  # lengths to count path depth without needing awk.
+  local home_slashes="${HOME//[^\/]/}"
+  local path_slashes="${path//[^\/]/}"
+  [[ ${#path_slashes} -lt ${#home_slashes} ]] && return 0
+
   printf '%s' "$path"
 }
 

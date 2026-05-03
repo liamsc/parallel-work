@@ -133,6 +133,55 @@ test_g_resume_recover_cwd_cursor_walks_up_to_existing() {
   teardown_test_workspace
 }
 
+# Description: Cursor cwd recovery refuses paths shallower than HOME (catches foreign-machine refs).
+# When a Cursor transcript references a path from a different machine
+# (e.g. /Users/test-user/... where that user doesn't exist locally) the
+# walk-up lands at /Users — a real directory but useless as a workspace
+# identifier. Recovery should reject anything with fewer path components
+# than $HOME.
+test_g_resume_recover_cwd_cursor_rejects_shallow() {
+  setup_test_workspace
+  _g_resume_setup
+
+  # /Users itself exists on macOS but is shallower than HOME — recovery
+  # should reject. Seed a transcript that references a deeper path under
+  # a non-existent user; walk-up will land at /Users.
+  local d="$PWORK_CURSOR_PROJECTS_DIR/foreign-machine/agent-transcripts/cur-foreign"
+  mkdir -p "$d"
+  local f="$d/cur-foreign.jsonl"
+  printf '{"role":"user","message":{"content":[{"type":"text","text":"see /Users/test-user/repo/file.txt"}]}}\n' > "$f"
+
+  local recovered
+  recovered=$(_pwork_resume_recover_cwd_cursor "$f")
+  assert_eq "" "$recovered" "shallow walk-up rejected"
+
+  _g_resume_teardown
+  teardown_test_workspace
+}
+
+# Description: where_label left-truncates long paths with a leading ellipsis.
+test_g_resume_where_label_truncates_long_path() {
+  setup_test_workspace
+  _g_resume_setup
+
+  # 50-char repo name forces truncation past the 22-char column.
+  local long_path="$HOME/repos/very-long-repository-name-that-overflows"
+  local label
+  label=$(_pwork_resume_where_label "$long_path")
+
+  # Truncated label should start with the ellipsis and fit in the column.
+  assert_contains "$label" "…" "truncated label has ellipsis"
+  if [[ ${#label} -gt 22 ]]; then
+    echo "  FAIL: truncated label too long (${#label} chars): $label" >&2
+    _g_resume_teardown
+    teardown_test_workspace
+    return 1
+  fi
+
+  _g_resume_teardown
+  teardown_test_workspace
+}
+
 # Description: where_label returns "pN" when the cwd is inside a registered workspace's clone.
 test_g_resume_where_label_pN_for_registered() {
   setup_test_workspace

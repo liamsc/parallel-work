@@ -6,8 +6,16 @@
 #   • Else → the absolute path
 #   • Empty input → "(unknown)"
 #
+# Long paths are left-truncated to fit the render column — keep this
+# matched with render.sh's label_w when the "Where" header is in use.
+#
 # Exports:
 #   _pwork_resume_where_label
+
+# Width must match render.sh's label_w for the "Where" header. Long paths
+# are left-truncated so the meaningful trailing component (the repo name)
+# stays visible.
+_PWORK_RESUME_LABEL_MAX_W=22
 
 # Cache the registered workspace list once per shell — _pwork_list_workspaces
 # rewrites the registry file every call (it self-prunes), so calling it once
@@ -60,5 +68,15 @@ _pwork_resume_where_label() {
 
   # Fall back to a $HOME-shortened path. ${cwd/#$HOME/~} replaces a leading
   # $HOME with literal ~ (the /# anchor restricts to the start of the string).
-  printf '%s' "${cwd/#$HOME/~}"
+  local label="${cwd/#$HOME/~}"
+
+  # Left-truncate so the trailing component (the repo name) stays visible
+  # — that's what identifies the session. ${var: -N} takes the last N
+  # chars; the leading space in `: -` is required to disambiguate from
+  # the default-value parameter expansion ${var:-default}.
+  if [[ ${#label} -gt $_PWORK_RESUME_LABEL_MAX_W ]]; then
+    local keep=$(( _PWORK_RESUME_LABEL_MAX_W - 1 ))
+    label="…${label: -$keep}"
+  fi
+  printf '%s' "$label"
 }
