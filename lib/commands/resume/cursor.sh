@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # Cursor session helpers — everything that knows about Cursor's on-disk
 # format and process model. Adding a new tool? Mirror this file.
-#   _pwork_resume_encode_cursor    — abs path → ~/.cursor/projects/<name>
-#   _pwork_resume_title_cursor     — pull session title out of a jsonl
-#   _pwork_jump_live_cursor_pid    — pgrep for an active `cursor agent`
+#   _pwork_resume_encode_cursor       — abs path → ~/.cursor/projects/<name>
+#   _pwork_resume_title_cursor        — pull session title out of a jsonl
+#   _pwork_resume_recover_cwd_cursor  — best-effort cwd recovery from jsonl
+#   _pwork_jump_live_cursor_pid       — pgrep for an active `cursor agent`
 
 # Encode an absolute path the way Cursor names its dir under
 # ~/.cursor/projects: / and _ become dashes, dots are dropped, no leading
@@ -34,6 +35,36 @@ _pwork_resume_title_cursor() {
   inside=$(printf '%s' "$t" | tr '\n' ' ' | sed -nE 's/.*<user_query>[[:space:]]*([^<]+).*/\1/p')
   [[ -n "$inside" ]] && t="$inside"
   _pwork_resume_truncate "$t"
+}
+
+# Best-effort recovery of the workspace path a Cursor session was opened
+# in. Unlike Claude, Cursor doesn't store a structured cwd field in its
+# transcripts — but absolute paths (file references) appear inside message
+# content. We grab the first one and walk up to the deepest existing
+# directory, which lands on the workspace root rather than a leaf file.
+#
+# Caveat: if the user references files outside their workspace before
+# referencing one inside it, this can over-shoot to a parent. For the
+# common case it's accurate enough; callers should treat an empty result
+# as "couldn't determine cwd" and render "(unknown)".
+_pwork_resume_recover_cwd_cursor() {
+  local f="$1" path
+  # grep -E — extended regex; -h — no filename prefix; -o — match only.
+  # Match "/Users/...", "/home/...", or "/private/var/folders/..." (macOS
+  # tmpdirs) inside double-quoted strings — those are the path shapes
+  # Cursor embeds in tool-call args.
+  path=$(grep -m 1 -hoE '"/(Users|home|private/var/folders)/[^"[:space:]]+"' "$f" 2>/dev/null)
+  [[ -z "$path" ]] && return 0
+  # Strip the surrounding quotes: ${var#"} and ${var%"}.
+  path="${path#\"}"
+  path="${path%\"}"
+  # Walk up until we hit an existing directory. Guard against a runaway
+  # loop (the path is absolute, so we're guaranteed to terminate at "/").
+  while [[ -n "$path" && "$path" != "/" && ! -d "$path" ]]; do
+    path="$(dirname "$path")"
+  done
+  [[ "$path" == "/" ]] && return 0
+  printf '%s' "$path"
 }
 
 # Find a live PID running `cursor agent --resume <session-id>`. Anchors
