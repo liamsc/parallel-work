@@ -37,6 +37,84 @@ _pwork_resume_title_cursor() {
   _pwork_resume_truncate "$t"
 }
 
+# Best-effort decode of a cursor encoded dirname back to its original
+# absolute workspace path. The encoder is lossy — it strips leading /,
+# deletes all dots, and replaces both / and _ with - — so a single
+# encoded form like "Users-liamcassidy-socratic-ml" could in principle
+# decode to several different paths. We resolve the ambiguity by walking
+# segments left-to-right and accumulating each into the longest prefix
+# that matches a real directory on disk. Each segment is tried as-is and
+# with a leading dot (so hidden dirs like .pwork_repos resolve too).
+#
+# Returns empty if the chain never matched anything below $HOME's depth
+# (defends against "/Users" leaking through when nothing on disk lined
+# up). Trailing unmatched segments are appended best-effort so deleted
+# workspaces still get a meaningful label.
+_pwork_resume_decode_cursor_dir() {
+  local encoded="$1"
+  [[ -z "$encoded" ]] && return 0
+
+  # Split on '-'. read -ra fills an array; IFS is scoped so we don't
+  # disturb the caller. (-r disables backslash escaping.)
+  local IFS='-'
+  local -a parts
+  read -r -a parts <<< "$encoded"
+  unset IFS
+
+  local cur=""        # absolute path matched so far
+  local segment=""    # bytes accumulated since last successful match
+  local p matched entry name enc_name list_dir
+
+  for p in "${parts[@]}"; do
+    if [[ -z "$segment" ]]; then
+      segment="$p"
+    else
+      segment="${segment}-${p}"
+    fi
+
+    # Walk the actual filesystem at the current point and look for a
+    # directory whose name, after applying cursor's lossy encoding
+    # (drop all dots, _ → -), exactly equals the segment we're after.
+    # This handles hidden dirs (leading .) and underscores in one step
+    # without trying combinatorial substitutions.
+    matched=""
+    # When cur is empty (we're at root) "$cur"/* still globs to /* —
+    # bash collapses the implicit leading "" into a single /. Avoid
+    # ${cur:-/} which produces "//*" with a literal double slash on macOS.
+    for entry in "$cur"/* "$cur"/.*; do
+      [[ -d "$entry" ]] || continue
+      name="$(basename "$entry")"
+      # Skip the special . and .. entries that come from the .* glob.
+      [[ "$name" == "." || "$name" == ".." ]] && continue
+      enc_name="${name//./}"      # delete every dot
+      enc_name="${enc_name//_/-}" # _ → - (cursor's encode does both)
+      if [[ "$enc_name" == "$segment" ]]; then
+        matched="$entry"
+        break
+      fi
+    done
+
+    if [[ -n "$matched" ]]; then
+      cur="$matched"
+      segment=""
+    fi
+  done
+
+  # Trailing unmatched segment means we couldn't fully resolve the path
+  # — bail rather than guess. Encoded paths whose deepest component was
+  # deleted/renamed end up here.
+  [[ -n "$segment" ]] && return 0
+
+  # HOME-floor: reject results shallower than $HOME (e.g. "/Users") so a
+  # totally-failed decode doesn't leak as a misleading label.
+  # ${var//pat/} keeps only / chars; we compare lengths.
+  local home_slashes="${HOME//[^\/]/}"
+  local cur_slashes="${cur//[^\/]/}"
+  [[ ${#cur_slashes} -lt ${#home_slashes} ]] && return 0
+
+  printf '%s' "$cur"
+}
+
 # Best-effort recovery of the workspace path a Cursor session was opened
 # in. Unlike Claude, Cursor doesn't store a structured cwd field in its
 # transcripts — but absolute paths (file references) appear inside message

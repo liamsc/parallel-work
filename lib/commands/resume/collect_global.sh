@@ -50,24 +50,26 @@ _pwork_resume_collect_global() {
 
   # Cursor: <encoded>/agent-transcripts/<uuid>/<uuid>.jsonl
   if [[ -d "$cursor_root" ]]; then
-    local live_pid
+    local live_pid encoded_basename
     for encoded_dir in "$cursor_root"/*; do
       [[ -d "$encoded_dir/agent-transcripts" ]] || continue
+      encoded_basename="$(basename "$encoded_dir")"
       for session_file in "$encoded_dir/agent-transcripts"/*/*.jsonl; do
         [[ -f "$session_file" ]] || continue
         mtime=$(_pwork_resume_mtime "$session_file")
         [[ -z "$mtime" ]] && continue
         session_id="$(basename "$(dirname "$session_file")")"
         title="$(_pwork_resume_title_cursor "$session_file")"
-        # Prefer the live agent's --workspace flag — it's authoritative.
-        # cursor-agent transcripts don't embed a structured cwd, and the
-        # in-content path heuristic can fall short on early-aborted
-        # sessions; the running process's argv always has the right path.
+        # Recovery order, most → least authoritative:
+        #   1. Live cursor-agent's --workspace argv (running process)
+        #   2. Greedy decode of the encoded dirname against the filesystem
+        #   3. Absolute path appearing in transcript content (heuristic)
         cwd=""
         live_pid=$(_pwork_jump_live_cursor_pid "$session_id")
         if [[ -n "$live_pid" ]]; then
           cwd=$(_pwork_resume_cursor_pid_workspace "$live_pid")
         fi
+        [[ -z "$cwd" ]] && cwd="$(_pwork_resume_decode_cursor_dir "$encoded_basename")"
         [[ -z "$cwd" ]] && cwd="$(_pwork_resume_recover_cwd_cursor "$session_file")"
         label="$(_pwork_resume_where_label "$cwd")"
         printf '%s\t%s\t%s\t%s\t%s\t%s\n' \

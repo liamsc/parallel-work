@@ -397,6 +397,46 @@ test_g_resume_invalid_limit_fails() {
   teardown_test_workspace
 }
 
+# Description: cursor encoded-dir decode reconstructs paths via filesystem listing.
+# The decoder walks each segment of the encoded name and looks at the
+# actual entries in the current directory — finding the one whose name
+# (after re-applying cursor's lossy encoding: drop dots, _→-) matches
+# the segment. This handles hidden dirs (.foo) and underscores in one
+# step without combinatorial substitution.
+test_g_resume_decode_cursor_dir_recovers_real_path() {
+  setup_test_workspace
+  _g_resume_setup
+
+  # Build a tree with a hidden dir and an underscore'd dir to exercise
+  # both encoder lossiness modes in one round trip.
+  local fake_home="$TEST_TMPDIR/fakehome"
+  mkdir -p "$fake_home/.hidden_dir/sub-name"
+
+  local real_path="$fake_home/.hidden_dir/sub-name"
+  local encoded
+  encoded=$(_pwork_resume_encode_cursor "$real_path")
+
+  local result
+  result=$(HOME="$fake_home" _pwork_resume_decode_cursor_dir "$encoded")
+  assert_eq "$real_path" "$result" "decode reconstructs hidden + underscored path" || { _g_resume_teardown; teardown_test_workspace; return 1; }
+
+  _g_resume_teardown
+  teardown_test_workspace
+}
+
+# Description: cursor encoded-dir decode returns empty when nothing on disk matches.
+test_g_resume_decode_cursor_dir_returns_empty_for_bogus() {
+  setup_test_workspace
+  _g_resume_setup
+
+  local result
+  result=$(_pwork_resume_decode_cursor_dir "totally-fake-nothing-real")
+  assert_eq "" "$result" "bogus encoded form → empty" || { _g_resume_teardown; teardown_test_workspace; return 1; }
+
+  _g_resume_teardown
+  teardown_test_workspace
+}
+
 # Description: cursor live-pid workspace extraction pulls the cwd out of cursor-agent's argv.
 # When cursor-agent is currently running, its command-line includes
 # `--workspace <path>` — that's authoritative. We use it instead of
