@@ -3,16 +3,18 @@
 # window dispatch. This file is the public entry point; everything else
 # lives under resume/ and resume/jump/ as small, focused modules:
 #
-#   resume/format.sh      — generic formatters (truncate, mtime, ago)
-#   resume/claude.sh      — Claude path encode + title + live discovery
-#   resume/cursor.sh      — Cursor path encode + title + live discovery
-#   resume/collect.sh     — per-clone aggregation (calls claude+cursor)
-#   resume/render.sh      — colored table renderer
-#   resume/dispatch.sh    — _pwork_resume_exec (jump-vs-launch)
-#   resume/jump/terminal.sh — pid → tty + ppid → terminal-app
-#   resume/jump/iterm2.sh   — iTerm2 AppleScript focus (tty-precise)
-#   resume/jump/ghostty.sh  — Ghostty AppleScript focus (name+cwd)
-#   resume/jump/window.sh   — _pwork_jump_window orchestrator
+#   resume/format.sh         — generic formatters (truncate, mtime, ago)
+#   resume/claude.sh         — Claude encode + title + cwd recovery + live
+#   resume/cursor.sh         — Cursor encode + title + cwd recovery + live
+#   resume/where.sh          — cwd → "Where" label (used by g-resume)
+#   resume/collect.sh        — per-clone aggregation (used by p-resume)
+#   resume/collect_global.sh — global aggregation (used by g-resume)
+#   resume/render.sh         — colored table renderer
+#   resume/dispatch.sh       — _pwork_resume_exec (jump-vs-launch)
+#   resume/jump/terminal.sh  — pid → tty + ppid → terminal-app
+#   resume/jump/iterm2.sh    — iTerm2 AppleScript focus (tty-precise)
+#   resume/jump/ghostty.sh   — Ghostty AppleScript focus (name+cwd)
+#   resume/jump/window.sh    — _pwork_jump_window orchestrator
 
 # BASH_SOURCE works in bash; %x prompt expansion works in zsh.
 _PWORK_RESUME_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-${(%):-%x}}")/resume" && pwd)"
@@ -26,7 +28,12 @@ source "$_PWORK_RESUME_DIR/jump/terminal.sh"
 source "$_PWORK_RESUME_DIR/jump/iterm2.sh"
 source "$_PWORK_RESUME_DIR/jump/ghostty.sh"
 source "$_PWORK_RESUME_DIR/jump/window.sh"
+# where.sh depends on _pwork_list_workspaces (from core.sh, already loaded
+# by shell-helpers.sh before commands.sh) — must be sourced before
+# collect_global.sh which calls _pwork_resume_where_label per row.
+source "$_PWORK_RESUME_DIR/where.sh"
 source "$_PWORK_RESUME_DIR/collect.sh"
+source "$_PWORK_RESUME_DIR/collect_global.sh"
 source "$_PWORK_RESUME_DIR/render.sh"
 source "$_PWORK_RESUME_DIR/dispatch.sh"
 
@@ -124,18 +131,20 @@ EOF
   fi
 
   # ── Build parallel arrays ─────────────────────────────────────
-  local -a row_clone=() row_tool=() row_id=() row_when=() row_title=()
+  # row_label[] holds the per-row workspace identifier — "pN" here in
+  # clone mode; g-resume populates it with a "Where" label instead.
+  local -a row_label=() row_tool=() row_id=() row_when=() row_title=()
   local mt cln tool sid title
   while IFS=$'\t' read -r mt cln tool sid title; do
     [[ -n "$mt" ]] || continue
-    row_clone+=("$cln")
+    row_label+=("$cln")
     row_tool+=("$tool")
     row_id+=("$sid")
     row_when+=("$(_pwork_resume_relative_time "$mt")")
     row_title+=("$title")
   done <<< "$sorted"
 
-  local row_count=${#row_clone[@]}
+  local row_count=${#row_label[@]}
 
   # ── Live-session detection (skipped under --force-new) ────────
   local live_data=""
@@ -170,7 +179,7 @@ EOF
       return 1
     fi
     local i=$(( jump - 1 ))
-    _pwork_resume_exec "${row_clone[$i]}" "${row_tool[$i]}" "${row_id[$i]}" "$root" "$force_new"
+    _pwork_resume_exec "${row_tool[$i]}" "${row_id[$i]}" "$root/${row_label[$i]}" "$force_new"
     return $?
   fi
 
@@ -183,8 +192,8 @@ EOF
   for (( _i2 = 0; _i2 < row_count; _i2++ )); do
     [[ "${is_open[$_i2]}" == "1" ]] && _any_live=1
   done
-  # render reads row_when/row_clone/row_tool/row_title/is_open from this scope.
-  _pwork_resume_render "$show_tool" "$_any_live" "$row_count"
+  # render reads row_when/row_label/row_tool/row_title/is_open from this scope.
+  _pwork_resume_render "$show_tool" "$_any_live" "$row_count" "Clone"
 
   # ── Prompt + dispatch ─────────────────────────────────────────
   echo ""
@@ -202,5 +211,5 @@ EOF
   fi
 
   local idx=$(( choice - 1 ))
-  _pwork_resume_exec "${row_clone[$idx]}" "${row_tool[$idx]}" "${row_id[$idx]}" "$root" "$force_new"
+  _pwork_resume_exec "${row_tool[$idx]}" "${row_id[$idx]}" "$root/${row_label[$idx]}" "$force_new"
 }

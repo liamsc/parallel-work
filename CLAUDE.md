@@ -22,12 +22,15 @@ All code lives in `lib/`:
 | `commands/setup.sh` | `p-setup` — apply statusline + clone config to existing clones |
 | `commands/clean.sh` | `p-clean` — recycle clones whose PR has been merged |
 | `commands/resume.sh` | `p-resume` — entry point: arg parse, listing build, render, prompt, dispatch (sources everything in `commands/resume/`) |
+| `commands/g-resume.sh` | `g-resume` — global session picker: same UX as `p-resume` but enumerates every Claude/Cursor session on disk regardless of workspace |
 | `commands/resume/format.sh` | Generic formatters: `_pwork_resume_truncate`, `_pwork_resume_mtime` (BSD/GNU portable), `_pwork_resume_relative_time` |
-| `commands/resume/claude.sh` | Claude-specific: path encoding, jsonl title extraction, live-session discovery via `~/.claude/sessions/<pid>.json` |
-| `commands/resume/cursor.sh` | Cursor-specific: path encoding, title extraction (strips `<attached_files>`), live PID via `pgrep -f cursor agent` |
+| `commands/resume/claude.sh` | Claude-specific: path encoding, title extraction, cwd recovery from JSONL, live-session discovery via `~/.claude/sessions/<pid>.json` |
+| `commands/resume/cursor.sh` | Cursor-specific: path encoding, title extraction (strips `<attached_files>`), best-effort cwd recovery, live PID via `pgrep -f cursor agent` |
+| `commands/resume/where.sh` | `_pwork_resume_where_label` — cwd → `~/relative/path` (or absolute path) with left-truncation, `(unknown)` for empty. Used by `g-resume` |
 | `commands/resume/collect.sh` | Per-clone aggregation — calls into `claude.sh` + `cursor.sh`, emits TSV rows for sort/slice |
-| `commands/resume/render.sh` | Colored table renderer — live ● marker, `* claude` / `> cursor` glyph + color, hint header |
-| `commands/resume/dispatch.sh` | `_pwork_resume_exec` — pick "focus existing window" vs "launch new" with bypass permissions |
+| `commands/resume/collect_global.sh` | Global aggregation — enumerates every dir under `~/.claude/projects/` and `~/.cursor/projects/`, recovers cwd per session, emits TSV rows |
+| `commands/resume/render.sh` | Colored table renderer — live ● marker, `* claude` / `> cursor` glyph + color, hint header. Takes a label header arg ("Clone" or "Where") for both p-resume and g-resume |
+| `commands/resume/dispatch.sh` | `_pwork_resume_exec` — pick "focus existing window" vs "launch new" with bypass permissions; takes the target cwd directly so it works for both clone-mode and global-mode |
 | `commands/resume/jump/terminal.sh` | `_pwork_jump_pid_tty`, `_pwork_jump_pid_terminal` — ppid walk identifies iterm2/ghostty/terminal/unknown |
 | `commands/resume/jump/iterm2.sh` | `_pwork_jump_focus_iterm2` — precise TTY-based AppleScript focus |
 | `commands/resume/jump/ghostty.sh` | `_pwork_jump_focus_ghostty` — best-effort focus by session name → cwd → activate |
@@ -55,6 +58,7 @@ All code lives in `lib/`:
 | `p-setup` | Apply statusline + clone config to all existing clones |
 | `p-clean [pN]` | Recycle clones whose PR has been merged |
 | `p-resume [N] [pN]` | List recent Claude/Cursor sessions across clones; focus an open window (iTerm2/Ghostty) or launch a new resume with bypass permissions |
+| `g-resume [N]` | Like `p-resume` but searches every Claude/Cursor session on disk regardless of workspace — finds sessions in repos that aren't part of any parallel-work workspace |
 | `p-update` | Update parallel-work to the latest version |
 | `p-version` | Show installed version and git SHA |
 | `plist` | List all commands |
