@@ -89,3 +89,18 @@ _pwork_jump_live_cursor_pid() {
   # head -1 takes only the first match.
   pgrep -f "cursor.*agent.*--resume.*$sid" 2>/dev/null | head -1
 }
+
+# Extract the --workspace value from a live cursor-agent's argv. The CLI
+# is always invoked as `... agent --resume <sid> --workspace <path>`, so
+# when the agent is currently running we can recover its workspace path
+# even if the JSONL transcript doesn't embed an absolute path. Returns
+# the path or empty if the pid is gone or has no --workspace flag.
+_pwork_resume_cursor_pid_workspace() {
+  local pid="$1"
+  [[ -z "$pid" ]] && return 0
+  # ps -o args= prints the full command line. sed pulls the path that
+  # follows --workspace; -nE = extended regex, suppress default output;
+  # the (...) capture group is what gets printed by the trailing /1/p.
+  ps -p "$pid" -o args= 2>/dev/null \
+    | sed -nE 's/.*--workspace[[:space:]]+([^[:space:]]+).*/\1/p'
+}

@@ -397,6 +397,46 @@ test_g_resume_invalid_limit_fails() {
   teardown_test_workspace
 }
 
+# Description: cursor live-pid workspace extraction pulls the cwd out of cursor-agent's argv.
+# When cursor-agent is currently running, its command-line includes
+# `--workspace <path>` — that's authoritative. We use it instead of
+# falling through to the in-content heuristic, which can return empty
+# for early-aborted transcripts.
+test_g_resume_cursor_pid_workspace_extracts_path() {
+  setup_test_workspace
+  _g_resume_setup
+
+  # Stub `ps` to return a fake cursor-agent argv for our test pid.
+  ps() {
+    case "$*" in
+      "-p 999999 -o args=") echo "/usr/local/bin/cursor-agent agent --resume abc-123 --workspace /tmp/some-workspace" ;;
+      *) command ps "$@" ;;
+    esac
+  }
+
+  local result
+  result=$(_pwork_resume_cursor_pid_workspace 999999)
+  assert_eq "/tmp/some-workspace" "$result" "extracted --workspace value" || { unset -f ps; _g_resume_teardown; teardown_test_workspace; return 1; }
+
+  unset -f ps
+  _g_resume_teardown
+  teardown_test_workspace
+}
+
+# Description: cursor live-pid workspace extraction returns empty when the pid is gone.
+test_g_resume_cursor_pid_workspace_empty_for_dead_pid() {
+  setup_test_workspace
+  _g_resume_setup
+
+  # 99999999 is reliably unallocated on macOS.
+  local result
+  result=$(_pwork_resume_cursor_pid_workspace 99999999)
+  assert_eq "" "$result" "dead pid → empty result" || { _g_resume_teardown; teardown_test_workspace; return 1; }
+
+  _g_resume_teardown
+  teardown_test_workspace
+}
+
 # Description: where_label produces clean output under zsh (no typeset-echo leakage).
 # Bug: zsh's `local` is `typeset`. Re-declaring a variable that's already
 # local in the same function scope makes zsh echo "name=''" to stdout —
