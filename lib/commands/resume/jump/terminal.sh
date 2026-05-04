@@ -20,9 +20,19 @@ _pwork_jump_pid_tty() {
 }
 
 # Walk the ppid chain from $1 upward looking for a known terminal-app
-# process. Echoes one of: iterm2 | ghostty | terminal | unknown.
-# `unknown` covers things like alacritty, kitty, wezterm, tmux-under-X — we
-# don't refuse to acknowledge them, we just know we can't auto-focus.
+# process. Echoes one of:
+#   iterm2 | ghostty | terminal — known terminal app, AppleScript-focusable
+#   detached                    — chain reached launchd (pid 1) without
+#                                 finding any terminal; the process has no
+#                                 controlling terminal. Common case:
+#                                 `cursor-agent` daemonizes itself, so its
+#                                 parent becomes launchd and TTY is "??".
+#                                 There is nothing to focus — caller should
+#                                 just launch fresh.
+#   unknown                     — walked through processes we don't know
+#                                 (alacritty, kitty, wezterm, …); session
+#                                 IS in a terminal window we can't script.
+#                                 Caller should warn rather than launch.
 _pwork_jump_pid_terminal() {
   local pid="$1" comm
   # Stop at pid 1 (init/launchd) — anything higher means we're still walking.
@@ -36,5 +46,13 @@ _pwork_jump_pid_terminal() {
     esac
     pid=$(ps -o ppid= -p "$pid" 2>/dev/null | xargs)
   done
-  echo "unknown"
+  # If we walked all the way to launchd, the process has no parent terminal
+  # at all. Distinguish from the "unknown terminal app" case so the caller
+  # can launch fresh instead of telling the user to "switch manually" to a
+  # window that doesn't exist.
+  if [[ "$pid" == "1" || "$pid" == "0" ]]; then
+    echo "detached"
+  else
+    echo "unknown"
+  fi
 }

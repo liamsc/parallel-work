@@ -73,8 +73,17 @@ _pwork_jump_window() {
       return 0
       ;;
     terminal|unknown)
+      # Real terminal window the user could find on their own; refuse to
+      # launch a duplicate that would visibly nest two agents.
       echo "Session is running in $terminal, which doesn't support auto-focus — switch manually." >&2
       return 0
+      ;;
+    detached)
+      # Process has no controlling terminal — cursor-agent daemonizes
+      # itself, so this is the common case for live Cursor sessions.
+      # There's no window to focus and no duplicate to worry about; let
+      # the caller launch fresh so the user can actually resume.
+      return 1
       ;;
   esac
   return 1

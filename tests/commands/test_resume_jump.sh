@@ -119,11 +119,13 @@ test_jump_pid_terminal_identifies_ghostty() {
   teardown_test_workspace
 }
 
-# Description: _pwork_jump_pid_terminal returns "unknown" when no terminal app is found.
-test_jump_pid_terminal_unknown_returns_unknown() {
+# Description: _pwork_jump_pid_terminal returns "detached" when the chain reaches launchd (no parent terminal).
+# Real-world case: `cursor-agent` daemonizes itself so its parent becomes
+# pid 1. Distinguishing this from "unknown terminal app" matters because
+# detached → launch fresh (no window to focus); unknown → warn the user.
+test_jump_pid_terminal_detached_returns_detached() {
   setup_test_workspace
 
-  # A chain that walks to launchd without ever hitting a known terminal.
   ps() {
     case "$*" in
       "-o ppid= -p 100") echo "1" ;;
@@ -134,9 +136,96 @@ test_jump_pid_terminal_unknown_returns_unknown() {
 
   local result
   result=$(_pwork_jump_pid_terminal 100)
-  assert_eq "unknown" "$result" "no known terminal in chain returns unknown"
+  assert_eq "detached" "$result" "chain reaching launchd → detached" || { unset -f ps; teardown_test_workspace; return 1; }
 
   unset -f ps
+  teardown_test_workspace
+}
+
+# Description: _pwork_jump_pid_terminal returns "unknown" when the chain walks through unrecognized apps without reaching launchd.
+# Real-world case: terminal apps we don't have AppleScript focus support
+# for (alacritty, kitty, wezterm). The session IS in a window the user
+# could find — caller should warn rather than launch a duplicate.
+test_jump_pid_terminal_unknown_terminal_app() {
+  setup_test_workspace
+
+  # Chain: 100 → 200 (alacritty) → ps fails (process gone). Loop exits
+  # with pid="" (not "1"), so we fall to the "unknown" branch.
+  ps() {
+    case "$*" in
+      "-o ppid= -p 100") echo "200" ;;
+      "-o comm= -p 100") echo "-zsh" ;;
+      "-o ppid= -p 200") echo "" ;;
+      "-o comm= -p 200") echo "alacritty" ;;
+      *) command ps "$@" ;;
+    esac
+  }
+
+  local result
+  result=$(_pwork_jump_pid_terminal 100)
+  assert_eq "unknown" "$result" "unrecognized terminal app → unknown" || { unset -f ps; teardown_test_workspace; return 1; }
+
+  unset -f ps
+  teardown_test_workspace
+}
+
+# Description: _pwork_jump_window returns non-zero (launch fresh) for a live cursor session whose process is detached.
+# Real-world case: cursor-agent daemonizes itself, so its parent is
+# launchd. Returning 0 here would print "switch manually" and refuse to
+# launch — leaving the user stuck because there's no terminal window
+# to switch to. We want the caller to launch a fresh resume instead.
+test_jump_window_detached_cursor_returns_failure() {
+  setup_test_workspace
+  _jump_setup_storage
+
+  # Spawn a real live PID so pgrep can find it.
+  _jump_spawn_live_pid
+  local live_pid=$REPLY
+
+  # Stub _pwork_jump_live_cursor_pid to return our live pid for a known sid.
+  # Stub _pwork_jump_pid_terminal to simulate the detached classification
+  # that _pwork_jump_pid_terminal would return for a real cursor-agent.
+  _pwork_jump_live_cursor_pid() { echo "$live_pid"; }
+  _pwork_jump_pid_terminal()    { echo "detached"; }
+
+  local status
+  _pwork_jump_window "fake-cursor-sid" "cursor" "/tmp/fake-cwd" >/dev/null 2>&1
+  status=$?
+
+  kill "$live_pid" 2>/dev/null
+  unset -f _pwork_jump_live_cursor_pid _pwork_jump_pid_terminal
+
+  assert_status_fail "$status" "detached cursor session → caller launches fresh" || { _jump_teardown_storage; teardown_test_workspace; return 1; }
+
+  _jump_teardown_storage
+  teardown_test_workspace
+}
+
+# Description: _pwork_jump_window returns 0 (refuse-to-duplicate) for an unknown but real terminal app.
+# Distinct from `detached`: the user IS in a terminal window (alacritty,
+# kitty, etc.) we just can't AppleScript-focus. Launching a duplicate
+# would visibly nest two agents — refuse and tell the user to switch.
+test_jump_window_unknown_terminal_refuses_launch() {
+  setup_test_workspace
+  _jump_setup_storage
+
+  _jump_spawn_live_pid
+  local live_pid=$REPLY
+
+  _pwork_jump_live_cursor_pid() { echo "$live_pid"; }
+  _pwork_jump_pid_terminal()    { echo "unknown"; }
+
+  local output status
+  output=$(_pwork_jump_window "fake-cursor-sid" "cursor" "/tmp/fake-cwd" 2>&1)
+  status=$?
+
+  kill "$live_pid" 2>/dev/null
+  unset -f _pwork_jump_live_cursor_pid _pwork_jump_pid_terminal
+
+  assert_status_ok "$status" "unknown-but-real terminal → refuse to launch new" || { _jump_teardown_storage; teardown_test_workspace; return 1; }
+  assert_contains "$output" "switch manually" "user told to switch manually" || { _jump_teardown_storage; teardown_test_workspace; return 1; }
+
+  _jump_teardown_storage
   teardown_test_workspace
 }
 
