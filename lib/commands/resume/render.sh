@@ -9,12 +9,19 @@
 #   • Tool column "* claude" / "> cursor" + yellow / cyan
 #
 # Reads these arrays from the caller's scope (bash dynamic scoping):
-#   row_when[]   row_clone[]   row_tool[]   row_title[]   is_open[]
+#   row_when[]   row_label[]   row_tool[]   row_title[]   is_open[]
 #
-# Args: <show_tool: true|false> <any_live: 0|1> <row_count>
+# row_label[] is the per-row workspace identifier — "pN" for clone-mode
+# (p-resume) and a "Where" label like "p3", "~/repos/foo", or "(unknown)"
+# for global-mode (g-resume).
+#
+# Args: <show_tool: true|false> <any_live: 0|1> <row_count> <label_header>
 
 _pwork_resume_render() {
-  local show_tool="$1" any_live="$2" row_count="$3"
+  local show_tool="$1" any_live="$2" row_count="$3" label_header="${4:-Clone}"
+  # Width follows header: short for "Clone", wider for "Where" so paths fit.
+  local label_w=5
+  [[ "$label_header" != "Clone" ]] && label_w=22
 
   # ANSI color codes. -t 1 tests whether stdout is a terminal — when
   # piped/captured (e.g. by tests), we skip codes so output stays plain.
@@ -35,12 +42,16 @@ _pwork_resume_render() {
 
   # Leading "live" column is one char wide (● or blank). We always render
   # it so the rest of the table aligns regardless of any-live state.
+  # %-*s — `*` consumes the next arg as the field width.
+  local label_dashes
+  printf -v label_dashes '%*s' "$label_w" ''
+  label_dashes="${label_dashes// /-}"
   if [[ "$show_tool" == true ]]; then
-    printf "%s  %-3s  %-10s  %-5s  %-9s  %s\n" " " "#" "When" "Clone" "Tool" "Title"
-    printf "%s  %-3s  %-10s  %-5s  %-9s  %s\n" " " "---" "----------" "-----" "---------" "-----"
+    printf "%s  %-3s  %-10s  %-*s  %-9s  %s\n" " " "#" "When" "$label_w" "$label_header" "Tool" "Title"
+    printf "%s  %-3s  %-10s  %-*s  %-9s  %s\n" " " "---" "----------" "$label_w" "$label_dashes" "---------" "-----"
   else
-    printf "%s  %-3s  %-10s  %-5s  %s\n" " " "#" "When" "Clone" "Title"
-    printf "%s  %-3s  %-10s  %-5s  %s\n" " " "---" "----------" "-----" "-----"
+    printf "%s  %-3s  %-10s  %-*s  %s\n" " " "#" "When" "$label_w" "$label_header" "Title"
+    printf "%s  %-3s  %-10s  %-*s  %s\n" " " "---" "----------" "$label_w" "$label_dashes" "-----"
   fi
 
   local i n color glyph live_marker
@@ -59,12 +70,12 @@ _pwork_resume_render() {
       esac
       # %s%-9s%s — color codes wrap the padded "<glyph> <tool>" cell.
       # ANSI codes have zero printed width, so column alignment is preserved.
-      printf "%s  %-3s  %-10s  %-5s  %s%-9s%s  %s\n" \
-        "$live_marker" "$n" "${row_when[$i]}" "${row_clone[$i]}" \
+      printf "%s  %-3s  %-10s  %-*s  %s%-9s%s  %s\n" \
+        "$live_marker" "$n" "${row_when[$i]}" "$label_w" "${row_label[$i]}" \
         "$color" "$glyph ${row_tool[$i]}" "$c_reset" "${row_title[$i]}"
     else
-      printf "%s  %-3s  %-10s  %-5s  %s\n" \
-        "$live_marker" "$n" "${row_when[$i]}" "${row_clone[$i]}" "${row_title[$i]}"
+      printf "%s  %-3s  %-10s  %-*s  %s\n" \
+        "$live_marker" "$n" "${row_when[$i]}" "$label_w" "${row_label[$i]}" "${row_title[$i]}"
     fi
   done
 }

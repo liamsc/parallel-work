@@ -3,6 +3,7 @@
 # on-disk format. Adding a new tool? Mirror this file.
 #   _pwork_resume_encode_claude       — abs path → ~/.claude/projects/<name>
 #   _pwork_resume_title_claude        — pull session title out of a jsonl
+#   _pwork_resume_recover_cwd_claude  — pull session's original cwd from jsonl
 #   _pwork_jump_live_claude_sessions  — emit one TSV row per live session
 #
 # Test-only env: PWORK_CLAUDE_SESSIONS_DIR overrides $HOME/.claude/sessions.
@@ -42,6 +43,25 @@ _pwork_resume_title_claude() {
     fi
   fi
   _pwork_resume_truncate "$t"
+}
+
+# Recover the absolute working directory a Claude session was opened in,
+# by reading the JSONL transcript itself. Claude writes "cwd":"<path>" on
+# many message entries — grep -m 1 stops at the first match, so this is
+# fast even on multi-megabyte transcripts. We deliberately avoid running
+# jq across the whole file for that reason.
+#
+# Returns empty string if no cwd field is present (rare — only happens for
+# transcripts that contain only metadata-style lines like permission-mode
+# or file-history-snapshot).
+_pwork_resume_recover_cwd_claude() {
+  local f="$1" line
+  # grep -m 1 — stop after first match. -o — print only the matching part.
+  line=$(grep -m 1 -o '"cwd":"[^"]*"' "$f" 2>/dev/null)
+  [[ -z "$line" ]] && return 0
+  # sed -nE — extended regex, suppress default output. The capture group
+  # pulls the path out of "cwd":"<path>".
+  printf '%s' "$line" | sed -nE 's/^"cwd":"(.*)"$/\1/p'
 }
 
 # Emit one TSV row per LIVE Claude session metadata file:
