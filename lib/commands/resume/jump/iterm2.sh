@@ -24,6 +24,13 @@ on run argv
           if tty of s is targetTTY then
             tell w to select t
             tell t to select s
+            -- `select t` / `select s` switch the tab+session within the
+            -- window's content, but leave the window's z-order alone.
+            -- If the matching window isn't already iTerm2's front window,
+            -- a plain `activate` brings iTerm2 forward but the user sees
+            -- a different window. Force this window to index 1 first so
+            -- activate raises THIS one.
+            set index of w to 1
             activate
             return "ok"
           end if
