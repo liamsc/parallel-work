@@ -1,26 +1,25 @@
 #!/usr/bin/env bash
 # Workspace-aware label for an absolute cwd. Used by g-resume to populate
 # the "Where" column. The goal is to give a short, scannable label:
-#   • If cwd is inside a registered parallel-work workspace as pN, → "pN"
-#   • Else if cwd is anywhere under $HOME, → "~/relative/path"
-#   • Else → the absolute path
-#   • Empty input → "(unknown)"
+#   • Empty cwd               → "(unknown)"
+#   • Anywhere under $HOME    → "~/relative/path"
+#   • Anything else           → the absolute path
 #
-# Long paths are left-truncated to fit the render column — keep this
-# matched with render.sh's label_w when the "Where" header is in use.
+# Long paths are left-truncated with a leading "…" so the trailing
+# component (the repo or clone name) stays visible. Width is matched to
+# render.sh's label_w when the "Where" header is in use.
+#
+# We deliberately don't try to summarize "this cwd is workspace X's pN"
+# — the user could be running g-resume from anywhere, and "p3" alone is
+# ambiguous when multiple workspaces have a p3 clone. Showing the path
+# always identifies which p3 you're looking at.
 #
 # Exports:
 #   _pwork_resume_where_label
 
-# Width must match render.sh's label_w for the "Where" header. Long paths
-# are left-truncated so the meaningful trailing component (the repo name)
-# stays visible.
+# Width must match render.sh's label_w for the "Where" header.
 _PWORK_RESUME_LABEL_MAX_W=22
 
-# Cache the registered workspace list once per shell — _pwork_list_workspaces
-# rewrites the registry file every call (it self-prunes), so calling it once
-# per row would be both wasteful and write-heavy. The guard variable is
-# inspected on each call; first call populates the cache.
 _pwork_resume_where_label() {
   local cwd="$1"
   if [[ -z "$cwd" ]]; then
@@ -28,56 +27,14 @@ _pwork_resume_where_label() {
     return 0
   fi
 
-  # All locals declared up-front. zsh's `local` is `typeset`, and
-  # re-declaring a variable that's already local in the same scope causes
-  # zsh to echo "name=''" to stdout — which would corrupt our return
-  # value. Declare each local exactly once.
-  local ws best=""
-
-  # Lazy-load the workspace list. _PWORK_RESUME_WS_LOADED guards the cache.
-  if [[ -z "${_PWORK_RESUME_WS_LOADED:-}" ]]; then
-    _PWORK_RESUME_WS_LIST=()
-    while IFS= read -r ws; do
-      [[ -n "$ws" ]] && _PWORK_RESUME_WS_LIST+=("$ws")
-    done < <(_pwork_list_workspaces 2>/dev/null)
-    _PWORK_RESUME_WS_LOADED=1
-  fi
-
-  # Longest-prefix match against workspace roots so a workspace nested
-  # inside another (rare but possible) resolves to the deeper one.
-  for ws in "${_PWORK_RESUME_WS_LIST[@]}"; do
-    # Match either "$ws" exactly or "$ws/..." (avoid "$wsX" false matches).
-    if [[ "$cwd" == "$ws" || "$cwd" == "$ws"/* ]]; then
-      # ${#var} is string length — pick the longest match.
-      if [[ ${#ws} -gt ${#best} ]]; then
-        best="$ws"
-      fi
-    fi
-  done
-
-  if [[ -n "$best" ]]; then
-    # Strip the workspace prefix; what remains is "" (cwd was the
-    # workspace root) or "pN" or "pN/sub/...".
-    local rel="${cwd#$best/}"
-    [[ "$rel" == "$cwd" ]] && rel=""
-    # Take the first path segment via ${var%%/*} (greedy strip from the
-    # right of the first /).
-    local first="${rel%%/*}"
-    # Fall through to the path fallback unless the first segment is "pN".
-    if [[ "$first" =~ ^p[0-9]+$ ]]; then
-      printf '%s' "$first"
-      return 0
-    fi
-  fi
-
-  # Fall back to a $HOME-shortened path. ${cwd/#$HOME/~} replaces a leading
-  # $HOME with literal ~ (the /# anchor restricts to the start of the string).
+  # ${cwd/#$HOME/~} replaces a leading $HOME with literal ~ (the /#
+  # anchor restricts to the start of the string).
   local label="${cwd/#$HOME/~}"
 
-  # Left-truncate so the trailing component (the repo name) stays visible
-  # — that's what identifies the session. ${var: -N} takes the last N
-  # chars; the leading space in `: -` is required to disambiguate from
-  # the default-value parameter expansion ${var:-default}.
+  # Left-truncate so the trailing component (the repo/clone name) stays
+  # visible — that's what identifies the session. ${var: -N} takes the
+  # last N chars; the leading space in `: -` is required to disambiguate
+  # from the default-value parameter expansion ${var:-default}.
   if [[ ${#label} -gt $_PWORK_RESUME_LABEL_MAX_W ]]; then
     local keep=$(( _PWORK_RESUME_LABEL_MAX_W - 1 ))
     label="…${label: -$keep}"

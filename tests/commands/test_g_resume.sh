@@ -4,25 +4,17 @@
 
 # ── Local helpers ────────────────────────────────────────────
 
-# Set up a fresh sandbox: redirect Claude/Cursor session storage AND the
-# parallel-work registry to TEST_TMPDIR. Resets the cached workspace list
-# so each test reads a fresh registry rather than seeing leakage from an
-# earlier test in the same process.
+# Set up a fresh sandbox: redirect Claude/Cursor session storage to
+# TEST_TMPDIR so tests don't read or write the user's real ~/.claude or
+# ~/.cursor.
 _g_resume_setup() {
   export PWORK_CLAUDE_PROJECTS_DIR="$TEST_TMPDIR/.claude-projects"
   export PWORK_CURSOR_PROJECTS_DIR="$TEST_TMPDIR/.cursor-projects"
   mkdir -p "$PWORK_CLAUDE_PROJECTS_DIR" "$PWORK_CURSOR_PROJECTS_DIR"
-  # _PWORK_REGISTRY drives _pwork_list_workspaces, which where.sh consults
-  # to convert an absolute cwd into a "pN" label when applicable.
-  _PWORK_REGISTRY="$TEST_TMPDIR/workspaces"
-  # The where.sh helper caches the workspace list per process — clear the
-  # guard so this test sees a fresh load.
-  unset _PWORK_RESUME_WS_LOADED _PWORK_RESUME_WS_LIST
 }
 
 _g_resume_teardown() {
   unset PWORK_CLAUDE_PROJECTS_DIR PWORK_CURSOR_PROJECTS_DIR
-  unset _PWORK_RESUME_WS_LOADED _PWORK_RESUME_WS_LIST
 }
 
 # Seed a Claude session jsonl at an arbitrary cwd. Writes both an
@@ -182,28 +174,8 @@ test_g_resume_where_label_truncates_long_path() {
   teardown_test_workspace
 }
 
-# Description: where_label returns "pN" when the cwd is inside a registered workspace's clone.
-test_g_resume_where_label_pN_for_registered() {
-  setup_test_workspace
-  create_workspace 2
-  _g_resume_setup
-
-  _pwork_register "$TEST_WORKSPACE"
-
-  local label
-  label=$(_pwork_resume_where_label "$TEST_WORKSPACE/p1")
-  assert_eq "p1" "$label" "registered workspace clone gets pN label"
-
-  unset _PWORK_RESUME_WS_LOADED _PWORK_RESUME_WS_LIST
-  label=$(_pwork_resume_where_label "$TEST_WORKSPACE/p2/some/sub/dir")
-  assert_eq "p2" "$label" "subdirectory under pN still resolves to pN"
-
-  _g_resume_teardown
-  teardown_test_workspace
-}
-
-# Description: where_label returns "(unknown)" for empty input and ~/path for HOME-relative paths.
-test_g_resume_where_label_fallbacks() {
+# Description: where_label shortens HOME-relative paths to ~/... and absolute paths stay as-is.
+test_g_resume_where_label_basic_paths() {
   setup_test_workspace
   _g_resume_setup
 
@@ -211,9 +183,11 @@ test_g_resume_where_label_fallbacks() {
   label=$(_pwork_resume_where_label "")
   assert_eq "(unknown)" "$label" "empty cwd → (unknown)"
 
-  unset _PWORK_RESUME_WS_LOADED _PWORK_RESUME_WS_LIST
   label=$(_pwork_resume_where_label "$HOME/some-repo")
   assert_eq "~/some-repo" "$label" "HOME path → ~/..."
+
+  label=$(_pwork_resume_where_label "/opt/elsewhere")
+  assert_eq "/opt/elsewhere" "$label" "non-HOME absolute path stays as-is"
 
   _g_resume_teardown
   teardown_test_workspace
@@ -242,24 +216,23 @@ test_g_resume_lists_unregistered_dirs() {
   teardown_test_workspace
 }
 
-# Description: g-resume's "Where" column shows pN for sessions inside a registered workspace.
-test_g_resume_labels_pN_for_registered_workspace() {
+# Description: g-resume's "Where" column shows the actual path (not pN), so it stays unambiguous when multiple workspaces exist.
+test_g_resume_where_column_shows_path() {
   setup_test_workspace
   create_workspace 2
   _g_resume_setup
 
-  _pwork_register "$TEST_WORKSPACE"
-  _seed_claude_at_cwd "$TEST_WORKSPACE/p1" "sid-p1" "p1 session" "202604281200"
+  _seed_claude_at_cwd "$TEST_WORKSPACE/p1" "sid-p1" "session in p1" "202604281200"
 
   local output
   output=$(cd "$TEST_TMPDIR" && echo "" | g-resume 2>&1)
 
-  assert_contains "$output" "p1 session" "session listed"
-  # Look specifically for "p1" in the Where column. Since we used a real
-  # workspace, the row line should contain " p1 " (with surrounding spaces
-  # from column padding). Loose match — assert_contains is fine.
-  assert_contains "$output" "p1" "Where column shows pN"
+  assert_contains "$output" "session in p1" "session listed"
   assert_contains "$output" "Where" "label header shows 'Where'"
+  # The label may be left-truncated for long paths, but the trailing
+  # component "p1" should always be visible — that's what tells you which
+  # clone of which workspace this session belongs to.
+  assert_contains "$output" "p1" "trailing component visible"
 
   _g_resume_teardown
   teardown_test_workspace
@@ -429,24 +402,22 @@ test_g_resume_invalid_limit_fails() {
 # local in the same function scope makes zsh echo "name=''" to stdout —
 # which corrupts the function's return value when captured via $(...).
 # This test runs the function under zsh and asserts the output is
-# exactly "p1" with no extra lines.
+# exactly the expected label with no extra lines.
 test_g_resume_where_label_clean_under_zsh() {
   if ! command -v zsh &>/dev/null; then return 0; fi
 
   setup_test_workspace
-  create_workspace 2
   _g_resume_setup
-  _pwork_register "$TEST_WORKSPACE"
 
   local output
   output=$(zsh -c "
+    export HOME='$HOME'
     export PWORK_INSTALL_DIR='$PWORK_INSTALL_DIR'
-    _PWORK_REGISTRY='$_PWORK_REGISTRY'
     source '$PWORK_INSTALL_DIR/lib/shell-helpers.sh'
-    _pwork_resume_where_label '$TEST_WORKSPACE/p1'
+    _pwork_resume_where_label '$HOME/example-repo'
   " 2>&1)
 
-  assert_eq "p1" "$output" "where_label returns just p1 under zsh"
+  assert_eq "~/example-repo" "$output" "where_label returns just ~/path under zsh"
 
   _g_resume_teardown
   teardown_test_workspace

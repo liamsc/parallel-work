@@ -26,7 +26,7 @@ All code lives in `lib/`:
 | `commands/resume/format.sh` | Generic formatters: `_pwork_resume_truncate`, `_pwork_resume_mtime` (BSD/GNU portable), `_pwork_resume_relative_time` |
 | `commands/resume/claude.sh` | Claude-specific: path encoding, title extraction, cwd recovery from JSONL, live-session discovery via `~/.claude/sessions/<pid>.json` |
 | `commands/resume/cursor.sh` | Cursor-specific: path encoding, title extraction (strips `<attached_files>`), best-effort cwd recovery, live PID via `pgrep -f cursor agent` |
-| `commands/resume/where.sh` | `_pwork_resume_where_label` — cwd → "pN" if inside a registered workspace, else `~/relative/path` or `(unknown)`. Used by `g-resume` |
+| `commands/resume/where.sh` | `_pwork_resume_where_label` — cwd → `~/relative/path` (or absolute path) with left-truncation, `(unknown)` for empty. Used by `g-resume` |
 | `commands/resume/collect.sh` | Per-clone aggregation — calls into `claude.sh` + `cursor.sh`, emits TSV rows for sort/slice |
 | `commands/resume/collect_global.sh` | Global aggregation — enumerates every dir under `~/.claude/projects/` and `~/.cursor/projects/`, recovers cwd per session, emits TSV rows |
 | `commands/resume/render.sh` | Colored table renderer — live ● marker, `* claude` / `> cursor` glyph + color, hint header. Takes a label header arg ("Clone" or "Where") for both p-resume and g-resume |
