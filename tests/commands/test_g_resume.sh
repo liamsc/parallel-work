@@ -477,6 +477,39 @@ test_g_resume_cursor_pid_workspace_empty_for_dead_pid() {
   teardown_test_workspace
 }
 
+# Description: cursor encoded-dir decoder runs under zsh without bash-only flags or unset-glob errors.
+# Bugs caught:
+#   • `read -a` is bash-only; zsh uses `-A` and errors on `-a`.
+#   • Unmatched dotfile glob ("$cur"/.*) raises "no matches found"
+#     under zsh's default options without `nullglob`.
+test_g_resume_decode_cursor_dir_runs_under_zsh() {
+  if ! command -v zsh &>/dev/null; then return 0; fi
+
+  setup_test_workspace
+  _g_resume_setup
+
+  # Build a fake home with a hidden + underscore'd dir so the decoder
+  # has to do its full lossy reverse-encoding.
+  local fake_home="$TEST_TMPDIR/zshhome"
+  mkdir -p "$fake_home/.hidden_repo/leaf-name"
+  local real_path="$fake_home/.hidden_repo/leaf-name"
+  local encoded
+  encoded=$(_pwork_resume_encode_cursor "$real_path")
+
+  local output
+  output=$(zsh -c "
+    export HOME='$fake_home'
+    export PWORK_INSTALL_DIR='$PWORK_INSTALL_DIR'
+    source '$PWORK_INSTALL_DIR/lib/shell-helpers.sh'
+    _pwork_resume_decode_cursor_dir '$encoded'
+  " 2>&1)
+
+  assert_eq "$real_path" "$output" "decoder runs cleanly under zsh and recovers the path" || { _g_resume_teardown; teardown_test_workspace; return 1; }
+
+  _g_resume_teardown
+  teardown_test_workspace
+}
+
 # Description: where_label produces clean output under zsh (no typeset-echo leakage).
 # Bug: zsh's `local` is `typeset`. Re-declaring a variable that's already
 # local in the same function scope makes zsh echo "name=''" to stdout —

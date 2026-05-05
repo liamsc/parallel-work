@@ -51,19 +51,38 @@ _pwork_resume_title_cursor() {
 # up). Trailing unmatched segments are appended best-effort so deleted
 # workspaces still get a meaningful label.
 _pwork_resume_decode_cursor_dir() {
+  # nullglob: an unmatched glob (e.g. a directory with no dotfiles) is a
+  # hard error under zsh's default options ("no matches found"). The walk
+  # below probes "$cur"/.* which silently misses with nullglob — exactly
+  # what we want. ksharrays keeps array indexing 0-based to match bash.
+  if [[ -n "${ZSH_VERSION:-}" ]]; then
+    setopt localoptions ksharrays nullglob
+  fi
+
   local encoded="$1"
   [[ -z "$encoded" ]] && return 0
 
-  # Split on '-'. read -ra fills an array; IFS is scoped so we don't
-  # disturb the caller. (-r disables backslash escaping.)
-  local IFS='-'
-  local -a parts
-  read -r -a parts <<< "$encoded"
-  unset IFS
+  # Split $encoded on '-' into parts[]. We can't use `read -a` (bash) or
+  # `read -A` (zsh) without forking the script — and `arr=($var)` with
+  # IFS='-' doesn't word-split under zsh's default options. Stick to
+  # parameter expansion, which behaves the same in both shells:
+  #   ${rest%%-*} — everything before the first `-`
+  #   ${rest#*-}  — everything after the first `-`
+  local -a parts=()
+  local rest="$encoded" part
+  while [[ -n "$rest" ]]; do
+    part="${rest%%-*}"
+    parts+=("$part")
+    if [[ "$part" == "$rest" ]]; then
+      rest=""
+    else
+      rest="${rest#*-}"
+    fi
+  done
 
   local cur=""        # absolute path matched so far
   local segment=""    # bytes accumulated since last successful match
-  local p matched entry name enc_name list_dir
+  local p matched entry name enc_name
 
   for p in "${parts[@]}"; do
     if [[ -z "$segment" ]]; then
