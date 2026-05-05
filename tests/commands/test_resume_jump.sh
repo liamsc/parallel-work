@@ -169,33 +169,56 @@ test_jump_pid_terminal_unknown_terminal_app() {
   teardown_test_workspace
 }
 
-# Description: _pwork_jump_window returns non-zero (launch fresh) for a live cursor session whose process is detached.
-# Real-world case: cursor-agent daemonizes itself, so its parent is
-# launchd. Returning 0 here would print "switch manually" and refuse to
-# launch — leaving the user stuck because there's no terminal window
-# to switch to. We want the caller to launch a fresh resume instead.
-test_jump_window_detached_cursor_returns_failure() {
+# Description: _pwork_jump_window activates Cursor.app for a detached cursor session when Cursor.app is running.
+# Real-world case: cursor-agent daemonizes itself when spawned by
+# Cursor.app — its parent becomes launchd. The "live tab" the user
+# wants to return to is inside Cursor.app's GUI panel, not a terminal.
+# We bring Cursor.app forward and refuse to launch a duplicate.
+test_jump_window_detached_cursor_focuses_cursor_app() {
   setup_test_workspace
   _jump_setup_storage
 
-  # Spawn a real live PID so pgrep can find it.
   _jump_spawn_live_pid
   local live_pid=$REPLY
 
-  # Stub _pwork_jump_live_cursor_pid to return our live pid for a known sid.
-  # Stub _pwork_jump_pid_terminal to simulate the detached classification
-  # that _pwork_jump_pid_terminal would return for a real cursor-agent.
-  _pwork_jump_live_cursor_pid() { echo "$live_pid"; }
-  _pwork_jump_pid_terminal()    { echo "detached"; }
+  _pwork_jump_live_cursor_pid()  { echo "$live_pid"; }
+  _pwork_jump_pid_terminal()     { echo "detached"; }
+  _pwork_jump_focus_cursor_app() { return 0; }  # Cursor.app is running
+
+  local output status
+  output=$(_pwork_jump_window "fake-cursor-sid" "cursor" "/tmp/fake-cwd" 2>&1)
+  status=$?
+
+  kill "$live_pid" 2>/dev/null
+  unset -f _pwork_jump_live_cursor_pid _pwork_jump_pid_terminal _pwork_jump_focus_cursor_app
+
+  assert_status_ok "$status" "Cursor.app focus succeeded → return 0 (don't launch new)" || { _jump_teardown_storage; teardown_test_workspace; return 1; }
+  assert_contains "$output" "Cursor.app to front" "user told what we did" || { _jump_teardown_storage; teardown_test_workspace; return 1; }
+
+  _jump_teardown_storage
+  teardown_test_workspace
+}
+
+# Description: _pwork_jump_window falls through to launch-new for a detached cursor when Cursor.app is not running.
+test_jump_window_detached_cursor_no_cursor_app_launches_new() {
+  setup_test_workspace
+  _jump_setup_storage
+
+  _jump_spawn_live_pid
+  local live_pid=$REPLY
+
+  _pwork_jump_live_cursor_pid()  { echo "$live_pid"; }
+  _pwork_jump_pid_terminal()     { echo "detached"; }
+  _pwork_jump_focus_cursor_app() { return 1; }  # Cursor.app not running
 
   local status
   _pwork_jump_window "fake-cursor-sid" "cursor" "/tmp/fake-cwd" >/dev/null 2>&1
   status=$?
 
   kill "$live_pid" 2>/dev/null
-  unset -f _pwork_jump_live_cursor_pid _pwork_jump_pid_terminal
+  unset -f _pwork_jump_live_cursor_pid _pwork_jump_pid_terminal _pwork_jump_focus_cursor_app
 
-  assert_status_fail "$status" "detached cursor session → caller launches fresh" || { _jump_teardown_storage; teardown_test_workspace; return 1; }
+  assert_status_fail "$status" "no Cursor.app → caller launches fresh" || { _jump_teardown_storage; teardown_test_workspace; return 1; }
 
   _jump_teardown_storage
   teardown_test_workspace

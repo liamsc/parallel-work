@@ -79,10 +79,17 @@ _pwork_jump_window() {
       return 0
       ;;
     detached)
-      # Process has no controlling terminal — cursor-agent daemonizes
-      # itself, so this is the common case for live Cursor sessions.
-      # There's no window to focus and no duplicate to worry about; let
-      # the caller launch fresh so the user can actually resume.
+      # Process has no controlling terminal. The common cause: Cursor.app
+      # spawned cursor-agent and shows the chat in its own panel — so the
+      # user's "live tab" is in Cursor.app, not in any terminal. Try to
+      # bring Cursor.app forward; fall through to launch-new only if it
+      # isn't running.
+      if [[ "$tool" == "cursor" ]] && _pwork_jump_focus_cursor_app; then
+        echo "Brought Cursor.app to front (detached cursor-agent — couldn't pinpoint specific tab)." >&2
+        return 0
+      fi
+      # No Cursor.app to focus, or this is a detached Claude (rare) —
+      # caller launches fresh.
       return 1
       ;;
   esac
