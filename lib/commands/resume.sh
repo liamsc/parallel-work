@@ -27,6 +27,7 @@ source "$_PWORK_RESUME_DIR/cursor.sh"
 source "$_PWORK_RESUME_DIR/jump/terminal.sh"
 source "$_PWORK_RESUME_DIR/jump/iterm2.sh"
 source "$_PWORK_RESUME_DIR/jump/ghostty.sh"
+source "$_PWORK_RESUME_DIR/jump/cursor_app.sh"
 source "$_PWORK_RESUME_DIR/jump/window.sh"
 # where.sh depends on _pwork_list_workspaces (from core.sh, already loaded
 # by shell-helpers.sh before commands.sh) — must be sourced before
