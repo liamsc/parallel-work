@@ -397,6 +397,119 @@ test_g_resume_invalid_limit_fails() {
   teardown_test_workspace
 }
 
+# Description: cursor encoded-dir decode reconstructs paths via filesystem listing.
+# The decoder walks each segment of the encoded name and looks at the
+# actual entries in the current directory — finding the one whose name
+# (after re-applying cursor's lossy encoding: drop dots, _→-) matches
+# the segment. This handles hidden dirs (.foo) and underscores in one
+# step without combinatorial substitution.
+test_g_resume_decode_cursor_dir_recovers_real_path() {
+  setup_test_workspace
+  _g_resume_setup
+
+  # Build a tree with a hidden dir and an underscore'd dir to exercise
+  # both encoder lossiness modes in one round trip.
+  local fake_home="$TEST_TMPDIR/fakehome"
+  mkdir -p "$fake_home/.hidden_dir/sub-name"
+
+  local real_path="$fake_home/.hidden_dir/sub-name"
+  local encoded
+  encoded=$(_pwork_resume_encode_cursor "$real_path")
+
+  local result
+  result=$(HOME="$fake_home" _pwork_resume_decode_cursor_dir "$encoded")
+  assert_eq "$real_path" "$result" "decode reconstructs hidden + underscored path" || { _g_resume_teardown; teardown_test_workspace; return 1; }
+
+  _g_resume_teardown
+  teardown_test_workspace
+}
+
+# Description: cursor encoded-dir decode returns empty when nothing on disk matches.
+test_g_resume_decode_cursor_dir_returns_empty_for_bogus() {
+  setup_test_workspace
+  _g_resume_setup
+
+  local result
+  result=$(_pwork_resume_decode_cursor_dir "totally-fake-nothing-real")
+  assert_eq "" "$result" "bogus encoded form → empty" || { _g_resume_teardown; teardown_test_workspace; return 1; }
+
+  _g_resume_teardown
+  teardown_test_workspace
+}
+
+# Description: cursor live-pid workspace extraction pulls the cwd out of cursor-agent's argv.
+# When cursor-agent is currently running, its command-line includes
+# `--workspace <path>` — that's authoritative. We use it instead of
+# falling through to the in-content heuristic, which can return empty
+# for early-aborted transcripts.
+test_g_resume_cursor_pid_workspace_extracts_path() {
+  setup_test_workspace
+  _g_resume_setup
+
+  # Stub `ps` to return a fake cursor-agent argv for our test pid.
+  ps() {
+    case "$*" in
+      "-p 999999 -o args=") echo "/usr/local/bin/cursor-agent agent --resume abc-123 --workspace /tmp/some-workspace" ;;
+      *) command ps "$@" ;;
+    esac
+  }
+
+  local result
+  result=$(_pwork_resume_cursor_pid_workspace 999999)
+  assert_eq "/tmp/some-workspace" "$result" "extracted --workspace value" || { unset -f ps; _g_resume_teardown; teardown_test_workspace; return 1; }
+
+  unset -f ps
+  _g_resume_teardown
+  teardown_test_workspace
+}
+
+# Description: cursor live-pid workspace extraction returns empty when the pid is gone.
+test_g_resume_cursor_pid_workspace_empty_for_dead_pid() {
+  setup_test_workspace
+  _g_resume_setup
+
+  # 99999999 is reliably unallocated on macOS.
+  local result
+  result=$(_pwork_resume_cursor_pid_workspace 99999999)
+  assert_eq "" "$result" "dead pid → empty result" || { _g_resume_teardown; teardown_test_workspace; return 1; }
+
+  _g_resume_teardown
+  teardown_test_workspace
+}
+
+# Description: cursor encoded-dir decoder runs under zsh without bash-only flags or unset-glob errors.
+# Bugs caught:
+#   • `read -a` is bash-only; zsh uses `-A` and errors on `-a`.
+#   • Unmatched dotfile glob ("$cur"/.*) raises "no matches found"
+#     under zsh's default options without `nullglob`.
+test_g_resume_decode_cursor_dir_runs_under_zsh() {
+  if ! command -v zsh &>/dev/null; then return 0; fi
+
+  setup_test_workspace
+  _g_resume_setup
+
+  # Build a fake home with a hidden + underscore'd dir so the decoder
+  # has to do its full lossy reverse-encoding.
+  local fake_home="$TEST_TMPDIR/zshhome"
+  mkdir -p "$fake_home/.hidden_repo/leaf-name"
+  local real_path="$fake_home/.hidden_repo/leaf-name"
+  local encoded
+  encoded=$(_pwork_resume_encode_cursor "$real_path")
+
+  local output
+  output=$(zsh -c "
+    export HOME='$fake_home'
+    export PWORK_INSTALL_DIR='$PWORK_INSTALL_DIR'
+    source '$PWORK_INSTALL_DIR/lib/shell-helpers.sh'
+    _pwork_resume_decode_cursor_dir '$encoded'
+  " 2>&1)
+
+  assert_eq "$real_path" "$output" "decoder runs cleanly under zsh and recovers the path" || { _g_resume_teardown; teardown_test_workspace; return 1; }
+
+  _g_resume_teardown
+  teardown_test_workspace
+}
+
 # Description: where_label produces clean output under zsh (no typeset-echo leakage).
 # Bug: zsh's `local` is `typeset`. Re-declaring a variable that's already
 # local in the same function scope makes zsh echo "name=''" to stdout —
