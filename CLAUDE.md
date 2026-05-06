@@ -130,6 +130,14 @@ rm -rf /tmp/test-clone
 - Config: `.parallel-work/pwork.conf` at workspace root, sourced to set `PWORK_*` variables
 - Each clone gets `.claude/CLAUDE.local.md` (git-excluded)
 
+## Always confirm before opening a PR
+
+Pull requests are the most visible artifact of a change. Once a PR is open, the diff is publicly indexed (for public repos), reviewers may already be tagged, and even after force-push the original commit objects linger in GitHub's object DB for ~30 days. **Never run `gh pr create` without an explicit user-side confirmation in the same conversation turn.**
+
+Acceptable forms of confirmation: "open the PR", "push it up as a PR", "ready to PR", or any direct equivalent. Phrases like "looks good", "let's commit", or "push it" authorize a commit/push, not a PR — ask for explicit PR confirmation as a separate step.
+
+When in doubt, say what you're about to do and ask. The cost of asking is one short turn; the cost of an unwanted PR is forced rewrites, lingering commit objects, and possibly leaked content.
+
 ## Don't commit personal paths
 
 Anything that lands in git history is effectively permanent — public PRs expose the path, force-pushes don't always fully erase it, and surgical history rewrites are a hassle. **Scan staged changes for user-specific paths before every commit, including in tests, fixtures, comments, and docs.**
