@@ -255,6 +255,38 @@ p-clean p2           # recycle just p2 (if its PR is merged)
 p-clean --dry-run    # show what would be recycled
 ```
 
+### `p-resume [N] [pN]` — resume a recent Claude/Cursor session
+
+Lists recent Claude Code and Cursor agent sessions across the current workspace's clones, sorted newest-first. Picking a row focuses the existing terminal window (iTerm2 / Ghostty) when the session is still open; otherwise it launches a fresh `claude --resume` / `cursor agent --resume` in the right clone directory.
+
+```bash
+p-resume                  # interactive picker
+p-resume 1                # jump to row 1 without prompting
+p-resume p2               # filter to clone p2
+p-resume --claude         # Claude sessions only
+p-resume --cursor         # Cursor sessions only
+p-resume --limit 20       # show more rows (default 15)
+```
+
+![p-resume](screenshots/p-resume.png)
+
+The leading `●` marks sessions that are currently open in a terminal — selecting one of those jumps to the existing window instead of launching a duplicate.
+
+### `g-resume [N]` — global session picker
+
+Same UX as `p-resume`, but searches every Claude/Cursor session on disk regardless of parallel-work workspace. Useful for "I was talking to Claude about X yesterday but forgot which repo" — sessions in ad-hoc repos and outside any workspace show up too.
+
+```bash
+g-resume                  # all sessions across disk
+g-resume --claude         # Claude only
+g-resume --cursor         # Cursor only
+g-resume --limit 30
+```
+
+![g-resume](screenshots/g-resume.png)
+
+The "Where" column shows each session's recovered working directory (`~/example-app/p1`, `~/repos/example-cli`, …) so multiple workspaces' clones stay distinguishable.
+
 ### `plist` — show help
 
 ```bash
