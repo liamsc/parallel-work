@@ -80,7 +80,11 @@ assert_status_fail() {
 #   - TEST_TMPDIR doesn't actually exist as a directory
 #   - TEST_TMPDIR is missing the sandbox-marker file (i.e., wasn't
 #     created by setup_test_workspace — could be the user's home dir)
-#   - path isn't TEST_TMPDIR itself or strictly under it
+#   - path isn't TEST_TMPDIR itself or strictly under it (string check)
+#   - canonicalized path (symlinks resolved) escapes the canonicalized
+#     TEST_TMPDIR — blocks symlink-traversal: if an intermediate dir in
+#     $path is a symlink to /Users/me, the string check passes but
+#     `rm -rf` would follow the link and delete the target
 _TEST_SANDBOX_MARKER='.parallel-work-test-sandbox'
 
 _test_rm() {
@@ -139,13 +143,34 @@ _test_rm() {
     return 1
   fi
 
-  # ── Final containment check ────────────────────────────────
+  # ── Containment check (string-prefix) ──────────────────────
   if [[ "$path" != "$TEST_TMPDIR" && "$path" != "$TEST_TMPDIR/"* ]]; then
     echo "_test_rm refused: path outside TEST_TMPDIR: $path (TEST_TMPDIR=$TEST_TMPDIR)" >&2
     return 1
   fi
 
-  rm -rf "$path"
+  # ── Symlink-escape check (canonical containment) ───────────
+  # The string check above can be defeated by a symlink anywhere on the
+  # path — e.g. $TEST_TMPDIR/escape -> /Users/me. Canonicalize both sides
+  # with realpath (resolves all symlinks) and re-check. If either resolve
+  # fails (path doesn't exist yet, etc.), fall back to the string check —
+  # we've already verified the string form is inside TEST_TMPDIR.
+  if command -v realpath >/dev/null 2>&1; then
+    local real_path real_tmpdir
+    real_path="$(realpath "$path" 2>/dev/null || true)"
+    real_tmpdir="$(realpath "$TEST_TMPDIR" 2>/dev/null || true)"
+    if [[ -n "$real_path" && -n "$real_tmpdir" ]]; then
+      if [[ "$real_path" != "$real_tmpdir" && "$real_path" != "$real_tmpdir/"* ]]; then
+        echo "_test_rm refused: canonical path escapes TEST_TMPDIR via symlink: $real_path (from $path)" >&2
+        return 1
+      fi
+    fi
+  fi
+
+  # `--` ends option parsing so a path beginning with "-" (already refused
+  # by the absolute-path check above, but defense-in-depth) can't be
+  # interpreted as an rm flag.
+  rm -rf -- "$path"
 }
 
 # ── Workspace fixtures ───────────────────────────────────────
