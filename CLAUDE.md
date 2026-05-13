@@ -140,30 +140,45 @@ When in doubt, say what you're about to do and ask. The cost of asking is one sh
 
 ## Don't commit personal paths
 
-Anything that lands in git history is effectively permanent — public PRs expose the path, force-pushes don't always fully erase it, and surgical history rewrites are a hassle. **Scan staged changes for user-specific paths before every commit, including in tests, fixtures, comments, and docs.**
+Anything that lands in git history is effectively permanent — public PRs expose the path, force-pushes don't always fully erase it, and surgical history rewrites are a hassle. **Scan staged changes for user-specific paths before every commit, including in tests, fixtures, comments, and docs.** This is mandatory, not advisory — run the pre-commit check below before *every* `git commit`.
 
 Common offenders:
 - `/Users/<your-username>/...` (macOS home dirs)
 - `/home/<your-username>/...` (Linux home dirs)
 - `/private/var/folders/<user-keyed>/...` (macOS temp dirs)
 - Workspace paths that include your username or company (`/Users/alice/work/internal-project`)
-- And any encoded variant of the above (e.g. Claude's `-Users-alice-...` flavor of `/Users/alice/...`)
+- **Encoded variants** — Claude's `-Users-alice-...` and Cursor's `Users-alice-...` (no leading slash, dashes for separators) decode back to your home dir and have leaked through in the past because they don't match a naive `/Users/` grep
 
-This applies to any committed file — test fixtures, doc tables, header comments, screenshots — not just source code. Don't reference your real paths in `CLAUDE.md` either; use placeholders.
+This applies to any committed file — test fixtures, doc tables, header comments, screenshots — not just source code. **Never reference your real username, home dir, or workspace paths in `CLAUDE.md` either** — it's a committed file, so anything you put here ships to history just like source.
 
 Use placeholders that exercise the same shape but don't identify you:
 - `/Users/me/...`, `/Users/test-user/...`
 - `~/test-data/...`
 - `/tmp/fixture/...`
+- For encoded forms: `Users-me-some-repo`, `-Users-me-some-repo`
 
-**Pre-commit check** (run before `git commit`):
+**Pre-commit check** (run before *every* `git commit`, including amends):
 
 ```bash
-git diff --cached | grep -nE '^\+.*(/Users/|/home/|/private/var/folders/)' \
-  | grep -vE '/(Users|home)/(me|test|test-user|fixture)\b' \
+# Pattern check: known personal-path shapes (paths, encoded forms).
+git diff --cached | grep -nE '^\+.*(/Users/|/home/|/private/var/folders/|[-"]Users-[a-z]|[-"]home-[a-z])' \
+  | grep -vE '/(Users|home)/(me|you|test|test-user|fixture|alice)\b|[-"]Users-(me|you|test|alice)\b' \
   && echo "✗ user-path candidate above — replace with a placeholder" \
   || echo "✓ no user paths in staged changes"
+
+# Literal-username check: the pattern grep above missed a real leak in
+# v0.4.1 (Cursor's encoded form "Users-<me>-<repo>" was used as a comment
+# example with the real username). This hard safety net matches the
+# literal output of `whoami` anywhere in the staged diff — it will catch
+# usernames in any context, including ones that don't look like a path.
+git diff --cached | grep -F "$(whoami)" \
+  && echo "✗ literal username appears in staged changes — replace with a placeholder" \
+  || echo "✓ literal username not in staged changes"
 ```
+
+**Both checks must pass before every commit.** If either prints ✗, stop and replace the offending text with a placeholder. Skipping the literal-username check is what allowed v0.4.1's leak — the pattern-only check is necessary but not sufficient.
+
+**Double-check for encoded forms.** The first grep alternation above (`[-"]Users-[a-z]`) is what catches the dash-encoded form that previously slipped through. If you're writing about how Claude or Cursor encode workspace paths into their on-disk dir names, *always* construct the example from a placeholder — never from your real cwd. Same rule for `CLAUDE.md` itself: the file is committed and indexed publicly, so a placeholder example is the only safe form here too.
 
 If a leak slips in:
 1. **Don't just `git commit --amend`** — the leak is still in earlier commits on the branch.
