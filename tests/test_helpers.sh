@@ -159,6 +159,71 @@ test_test_rm_refuses_relative_tmpdir() {
   teardown_test_workspace
 }
 
+# Description: _test_rm refuses paths that escape TEST_TMPDIR via a symlink.
+# The string-prefix containment check would pass for paths like
+# $TEST_TMPDIR/escape/important, but if "escape" is a symlink to /Users/me,
+# `rm -rf` would follow it and delete real user data. The canonical-path
+# check using realpath blocks this.
+#
+# Fixture note: this test is the one place where we deliberately reach
+# outside TEST_TMPDIR — otherwise we couldn't simulate the escape we're
+# defending against. Cleanup uses targeted `unlink` + `rmdir` (no `rm -rf`,
+# no recursion), so even if the fixture goes wrong nothing can walk into
+# unrelated directories.
+test_test_rm_refuses_symlink_escape() {
+  setup_test_workspace
+  # Build a true outside-the-sandbox dir to act as "user data we'd hate to
+  # lose". $TMPDIR (or /tmp) is the parent — the symlink under TEST_TMPDIR
+  # will point at it.
+  local outside_root="${TMPDIR:-/tmp}"
+  local outside="$outside_root/parallel-work-test-symlink-target-$$"
+  mkdir -p "$outside"
+  echo "user data" > "$outside/important.txt"
+
+  # Sanity: $outside must be outside $TEST_TMPDIR. If a future change to
+  # mktemp behavior puts them in the same tree, abort instead of misleading.
+  case "$outside" in
+    "$TEST_TMPDIR"|"$TEST_TMPDIR"/*)
+      echo "  FAIL: fixture error — outside dir is inside TEST_TMPDIR" >&2
+      unlink "$outside/important.txt" 2>/dev/null
+      rmdir "$outside" 2>/dev/null
+      teardown_test_workspace
+      return 1 ;;
+  esac
+
+  ln -s "$outside" "$TEST_TMPDIR/escape"
+
+  local output status
+  # String containment passes ($TEST_TMPDIR/escape/...) but realpath
+  # resolves to $outside/important.txt — outside canonical TEST_TMPDIR.
+  output=$(_test_rm "$TEST_TMPDIR/escape/important.txt" 2>&1)
+  status=$?
+
+  local refusal_failed=0
+  [[ "$status" -eq 0 ]] && refusal_failed=1
+  local data_lost=0
+  [[ ! -f "$outside/important.txt" ]] && data_lost=1
+
+  # Targeted cleanup. unlink + rmdir only — never `rm -rf` outside the
+  # sandbox. If the safety check failed and the file is already gone,
+  # unlink errors harmlessly.
+  unlink "$outside/important.txt" 2>/dev/null
+  rmdir "$outside" 2>/dev/null
+
+  if [[ "$refusal_failed" -eq 1 ]]; then
+    echo "  FAIL: _test_rm should refuse a path that escapes via symlink (exit status: $status)" >&2
+    teardown_test_workspace
+    return 1
+  fi
+  assert_contains "$output" "symlink" "error names the cause"
+  if [[ "$data_lost" -eq 1 ]]; then
+    echo "  FAIL: file was deleted through the symlink (very bad)" >&2
+    teardown_test_workspace
+    return 1
+  fi
+  teardown_test_workspace
+}
+
 # Description: _test_rm accepts TEST_TMPDIR itself (used by teardown).
 test_test_rm_accepts_tmpdir_root() {
   setup_test_workspace
