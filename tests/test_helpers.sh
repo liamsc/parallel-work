@@ -248,7 +248,112 @@ test_test_rm_refuses_newline_in_path() {
   output=$(_test_rm "$TEST_TMPDIR/with"$'\n'"newline" 2>&1)
   status=$?
   assert_status_fail "$status" "_test_rm should refuse newline in path"
-  assert_contains "$output" "newline" "error names the cause"
+  assert_contains "$output" "control characters" "error names the cause"
+  teardown_test_workspace
+}
+
+# Description: _test_rm refuses paths containing other control characters.
+# Generalizes the newline check — tab, escape, and DEL are equally suspicious
+# and could hide nasty content from an operator scanning the error log.
+test_test_rm_refuses_control_chars_in_path() {
+  setup_test_workspace
+  local output status
+  # $'\t' = tab (0x09), $'\033' = escape (0x1b — terminal escape leader),
+  # $'\177' = DEL. All three should be refused with the same error.
+  for ch in $'\t' $'\033' $'\177'; do
+    output=$(_test_rm "$TEST_TMPDIR/with${ch}sneaky" 2>&1)
+    status=$?
+    assert_status_fail "$status" "_test_rm should refuse control character in path"
+    assert_contains "$output" "control characters" "error names the cause"
+  done
+  teardown_test_workspace
+}
+
+# Description: _test_rm refuses when called with anything other than one arg.
+# Protects against unquoted-expansion bugs: `_test_rm $var` with whitespace
+# in $var splits into multiple args, and rm sees them all — only $1 would
+# have been safety-checked.
+test_test_rm_refuses_wrong_arg_count() {
+  setup_test_workspace
+  local output status
+  # Zero args.
+  output=$(_test_rm 2>&1)
+  status=$?
+  assert_status_fail "$status" "_test_rm with no args should fail"
+  assert_contains "$output" "expected exactly 1 argument" "error names the cause"
+  # Two args — both inside the sandbox, so without the arity check they'd
+  # plausibly both get deleted by rm. The arity check refuses before we get
+  # near rm.
+  local target_a="$TEST_TMPDIR/a"
+  local target_b="$TEST_TMPDIR/b"
+  : > "$target_a"
+  : > "$target_b"
+  output=$(_test_rm "$target_a" "$target_b" 2>&1)
+  status=$?
+  assert_status_fail "$status" "_test_rm with 2 args should fail"
+  assert_contains "$output" "expected exactly 1 argument" "error names the cause"
+  # Sanity: neither file got deleted.
+  if [[ ! -f "$target_a" || ! -f "$target_b" ]]; then
+    echo "  FAIL: arity check fired too late — file was deleted" >&2
+    teardown_test_workspace
+    return 1
+  fi
+  teardown_test_workspace
+}
+
+# Description: _test_rm refuses TEST_TMPDIR containing '..'.
+# A "/sandbox/.." TEST_TMPDIR would canonicalize to "/" via realpath and
+# defeat the canonical containment check. The string hygiene catches it
+# before we get that far.
+test_test_rm_refuses_dotdot_in_tmpdir() {
+  setup_test_workspace
+  local output status
+  output=$(TEST_TMPDIR="$TEST_TMPDIR/sub/.." _test_rm "$TEST_TMPDIR/something" 2>&1)
+  status=$?
+  assert_status_fail "$status" "_test_rm should refuse TEST_TMPDIR with '..'"
+  assert_contains "$output" "'..'" "error names the cause"
+  teardown_test_workspace
+}
+
+# Description: _test_rm refuses TEST_TMPDIR containing control characters.
+test_test_rm_refuses_control_chars_in_tmpdir() {
+  setup_test_workspace
+  local output status
+  output=$(TEST_TMPDIR="$TEST_TMPDIR"$'\n'"junk" _test_rm "$TEST_TMPDIR/something" 2>&1)
+  status=$?
+  assert_status_fail "$status" "_test_rm should refuse TEST_TMPDIR with control chars"
+  assert_contains "$output" "control characters" "error names the cause"
+  teardown_test_workspace
+}
+
+# Description: _test_rm uses `command rm` to bypass user-level rm shadowing.
+# If a caller defines a shell function named `rm` (e.g. accidentally, or as
+# a debugging shim), _test_rm must still call the real rm. Otherwise a
+# malicious or buggy override could intercept and bypass every guard above.
+test_test_rm_bypasses_rm_function_shadow() {
+  setup_test_workspace
+  local target="$TEST_TMPDIR/disposable"
+  : > "$target"
+
+  # Define a hostile shadow that would skip the actual delete.
+  rm() { echo "HOSTILE rm shim called with: $*" >&2; return 0; }
+
+  _test_rm "$target"
+  local rc=$?
+
+  # Restore default behavior for any later cleanup.
+  unset -f rm
+
+  if [[ "$rc" -ne 0 ]]; then
+    echo "  FAIL: _test_rm returned $rc instead of deleting target" >&2
+    teardown_test_workspace
+    return 1
+  fi
+  if [[ -e "$target" ]]; then
+    echo "  FAIL: target survived because rm shadow was hit instead of command rm" >&2
+    teardown_test_workspace
+    return 1
+  fi
   teardown_test_workspace
 }
 
