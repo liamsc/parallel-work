@@ -140,30 +140,33 @@ When in doubt, say what you're about to do and ask. The cost of asking is one sh
 
 ## Don't commit personal paths
 
-Anything that lands in git history is effectively permanent — public PRs expose the path, force-pushes don't always fully erase it, and surgical history rewrites are a hassle. **Scan staged changes for user-specific paths before every commit, including in tests, fixtures, comments, and docs.**
+Anything that lands in git history is effectively permanent — public PRs expose the path, force-pushes don't always fully erase it, and surgical history rewrites are a hassle. **Scan staged changes for user-specific paths before every commit, including in tests, fixtures, comments, and docs.** This is mandatory, not advisory — run the pre-commit check below before *every* `git commit`.
 
 Common offenders:
 - `/Users/<your-username>/...` (macOS home dirs)
 - `/home/<your-username>/...` (Linux home dirs)
 - `/private/var/folders/<user-keyed>/...` (macOS temp dirs)
 - Workspace paths that include your username or company (`/Users/alice/work/internal-project`)
-- And any encoded variant of the above (e.g. Claude's `-Users-alice-...` flavor of `/Users/alice/...`)
+- **Encoded variants** — Claude's `-Users-alice-...` and Cursor's `Users-alice-...` (no leading slash, dashes for separators) decode back to your home dir and have leaked through in the past because they don't match a naive `/Users/` grep
 
-This applies to any committed file — test fixtures, doc tables, header comments, screenshots — not just source code. Don't reference your real paths in `CLAUDE.md` either; use placeholders.
+This applies to any committed file — test fixtures, doc tables, header comments, screenshots — not just source code. **Never reference your real username, home dir, or workspace paths in `CLAUDE.md` either** — it's a committed file, so anything you put here ships to history just like source.
 
 Use placeholders that exercise the same shape but don't identify you:
 - `/Users/me/...`, `/Users/test-user/...`
 - `~/test-data/...`
 - `/tmp/fixture/...`
+- For encoded forms: `Users-me-some-repo`, `-Users-me-some-repo`
 
-**Pre-commit check** (run before `git commit`):
+**Pre-commit check** (run before *every* `git commit`, including amends):
 
 ```bash
-git diff --cached | grep -nE '^\+.*(/Users/|/home/|/private/var/folders/)' \
-  | grep -vE '/(Users|home)/(me|test|test-user|fixture)\b' \
+git diff --cached | grep -nE '^\+.*(/Users/|/home/|/private/var/folders/|[-"]Users-[a-z]|[-"]home-[a-z])' \
+  | grep -vE '/(Users|home)/(me|you|test|test-user|fixture|alice)\b|[-"]Users-(me|you|test|alice)\b' \
   && echo "✗ user-path candidate above — replace with a placeholder" \
   || echo "✓ no user paths in staged changes"
 ```
+
+**Double-check for encoded forms.** The first grep alternation above (`[-"]Users-[a-z]`) is what catches the dash-encoded form that previously slipped through. If you're writing about how Claude or Cursor encode workspace paths into their on-disk dir names, *always* construct the example from a placeholder — never from your real cwd.
 
 If a leak slips in:
 1. **Don't just `git commit --amend`** — the leak is still in earlier commits on the branch.
