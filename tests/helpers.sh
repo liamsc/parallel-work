@@ -70,14 +70,22 @@ assert_status_fail() {
 # this test harness made.
 #
 # Refuses any of:
+#   - wrong number of arguments (must be exactly 1) — protects against
+#     unquoted-expansion bugs where `_test_rm $var` splits into multiple
+#     arguments and only the first gets safety-checked
 #   - empty path
 #   - non-absolute path (relative paths resolve via $PWD — too risky)
 #   - path is exactly "/" (belt-and-suspenders for the worst case)
 #   - path contains ".." (defends against relative-path bypass)
-#   - path contains a newline or carriage return (defends against weird
-#     shell-quoting bugs that splice extra arguments into "$path")
+#   - path contains any control character (newline, CR, tab, escape, DEL,
+#     etc.) — defends against weird shell-quoting bugs that splice extra
+#     arguments into "$path", and against terminal-escape mischief in
+#     error messages
 #   - TEST_TMPDIR is unset
 #   - TEST_TMPDIR is non-absolute
+#   - TEST_TMPDIR contains ".." or control characters (same hygiene we
+#     apply to $path — a malformed TEST_TMPDIR shouldn't slip through
+#     just because the path argument is clean)
 #   - TEST_TMPDIR is suspiciously short (< 16 chars: rules out "/", "/tmp")
 #   - TEST_TMPDIR is on a hardcoded denylist of system directories or
 #     equals $HOME — the marker check would already refuse most of these,
@@ -98,6 +106,9 @@ assert_status_fail() {
 #     $path is a symlink to /Users/me, the string check passes but
 #     `rm -rf` would follow the link and delete the target
 #
+# Final `rm` invocation uses `command rm` so a user-level alias or shell
+# function named `rm` can't intercept the call and bypass these guards.
+#
 # A trailing slash on TEST_TMPDIR (e.g. /tmp/foo/) is normalized away so
 # the prefix check doesn't falsely refuse paths inside it (without this,
 # the prefix would be "/tmp/foo//" and "/tmp/foo/bar" wouldn't match).
@@ -114,6 +125,14 @@ _TEST_RM_TMPDIR_DENYLIST=(
 )
 
 _test_rm() {
+  # Arity check first. `_test_rm $var "$other"` with an empty $var collapses
+  # to one arg, but with whitespace it splits into many — and only $1 gets
+  # safety-checked, while every arg gets passed to rm. Refuse anything that
+  # isn't exactly one argument so the caller has to fix the quoting.
+  if [[ $# -ne 1 ]]; then
+    echo "_test_rm refused: expected exactly 1 argument, got $#" >&2
+    return 1
+  fi
   local path="$1"
 
   # ── Path-shape checks ──────────────────────────────────────
@@ -136,12 +155,14 @@ _test_rm() {
   case "$path" in
     *..*) echo "_test_rm refused: path contains '..': $path" >&2; return 1 ;;
   esac
-  # $'\n' / $'\r' — bash ANSI-C quoting for a literal newline / carriage
-  # return. Catches malformed paths that could trip up tools downstream
-  # which read only the first line.
+  # Bash glob `[...]` with ANSI-C ranges. $'\001'-$'\037' covers ASCII
+  # control bytes 1-31 (tab=9, newline=10, CR=13, escape=27) and $'\177'
+  # is DEL. Catches malformed paths that trip up downstream tools which
+  # read only the first line, plus terminal-escape sequences in paths
+  # that would otherwise render in the error message.
   case "$path" in
-    *$'\n'*|*$'\r'*)
-      echo "_test_rm refused: path contains a newline or carriage return" >&2
+    *[$'\001'-$'\037']*|*$'\177'*)
+      echo "_test_rm refused: path contains control characters" >&2
       return 1 ;;
   esac
 
@@ -154,6 +175,18 @@ _test_rm() {
     echo "_test_rm refused: TEST_TMPDIR is not absolute: $TEST_TMPDIR" >&2
     return 1
   fi
+  # Same hygiene we apply to $path. A TEST_TMPDIR with `..` defeats the
+  # canonical containment check (realpath would resolve "/sandbox/.." to
+  # "/" before comparison), and control chars in TEST_TMPDIR could splice
+  # extra args into rm or hide nasty paths inside escape sequences.
+  case "$TEST_TMPDIR" in
+    *..*)
+      echo "_test_rm refused: TEST_TMPDIR contains '..': $TEST_TMPDIR" >&2
+      return 1 ;;
+    *[$'\001'-$'\037']*|*$'\177'*)
+      echo "_test_rm refused: TEST_TMPDIR contains control characters" >&2
+      return 1 ;;
+  esac
   # ${TEST_TMPDIR%/} — bash parameter expansion that strips a single
   # trailing "/" if present. Normalizes "/tmp/foo/" to "/tmp/foo" so the
   # prefix check below doesn't end up looking for "/tmp/foo//" (which no
@@ -227,10 +260,14 @@ _test_rm() {
     fi
   fi
 
+  # `command rm` bypasses any user-level `rm` alias or shell function — if
+  # someone shadowed rm (e.g. `alias rm='rm -i'` or a hostile function),
+  # we'd silently lose our safety guarantees. `command` skips alias/function
+  # lookup and goes straight to the builtin/external binary.
   # `--` ends option parsing so a path beginning with "-" (already refused
   # by the absolute-path check above, but defense-in-depth) can't be
   # interpreted as an rm flag.
-  rm -rf -- "$path"
+  command rm -rf -- "$path"
 }
 
 # ── Workspace fixtures ───────────────────────────────────────
