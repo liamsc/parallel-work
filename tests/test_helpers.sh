@@ -238,3 +238,84 @@ test_test_rm_accepts_tmpdir_root() {
   fi
   # No teardown_test_workspace — we just removed the dir it would clean up.
 }
+
+# Description: _test_rm refuses paths containing a newline.
+# Defends against shell-quoting bugs that splice extra arguments into "$path".
+test_test_rm_refuses_newline_in_path() {
+  setup_test_workspace
+  local output status
+  # $'...' — bash ANSI-C quoting so \n expands to a literal newline.
+  output=$(_test_rm "$TEST_TMPDIR/with"$'\n'"newline" 2>&1)
+  status=$?
+  assert_status_fail "$status" "_test_rm should refuse newline in path"
+  assert_contains "$output" "newline" "error names the cause"
+  teardown_test_workspace
+}
+
+# Description: _test_rm refuses if TEST_TMPDIR equals $HOME.
+# $HOME is long enough to slip past the length floor, so the marker check
+# and this explicit denylist entry are the only walls left.
+test_test_rm_refuses_home_as_tmpdir() {
+  setup_test_workspace
+  local output status
+  # Use the real $HOME — that's the value the denylist actually compares
+  # against. The marker check would also refuse (no marker in $HOME), but
+  # the denylist fires first and gives a clearer message.
+  output=$(TEST_TMPDIR="$HOME" _test_rm "$HOME/some-file" 2>&1)
+  status=$?
+  assert_status_fail "$status" "_test_rm should refuse TEST_TMPDIR=\$HOME"
+  assert_contains "$output" "known-dangerous" "error names the cause"
+  teardown_test_workspace
+}
+
+# Description: _test_rm refuses if TEST_TMPDIR itself is a symlink.
+# Closes a hole where TEST_TMPDIR=/tmp/imposter -> /Users/me would pass the
+# marker check (it follows the link) and then rm -rf would delete real user
+# files through the link.
+test_test_rm_refuses_symlink_tmpdir() {
+  setup_test_workspace
+  # Real directory that the symlink will point at — placed inside the real
+  # sandbox so cleanup is automatic. Drop a marker so the marker check would
+  # otherwise pass through the link.
+  local real_target="$TEST_TMPDIR/real-target"
+  mkdir -p "$real_target"
+  : > "$real_target/$_TEST_SANDBOX_MARKER"
+  echo "user data" > "$real_target/important.txt"
+
+  # The symlink itself lives alongside the sandbox (under TMPDIR/tmp, not
+  # inside the real sandbox we want to protect) so it doesn't get cleaned up
+  # by realpath-based comparisons we're not testing here.
+  local link_path="$TEST_TMPDIR/symlink-tmpdir"
+  ln -s "$real_target" "$link_path"
+
+  local output status
+  output=$(TEST_TMPDIR="$link_path" _test_rm "$link_path/important.txt" 2>&1)
+  status=$?
+  assert_status_fail "$status" "_test_rm should refuse a symlinked TEST_TMPDIR"
+  assert_contains "$output" "symlink" "error names the cause"
+  # Sanity: the file we tried to delete is still there.
+  if [[ ! -f "$real_target/important.txt" ]]; then
+    echo "  FAIL: file was deleted through the symlinked TEST_TMPDIR" >&2
+    teardown_test_workspace
+    return 1
+  fi
+  teardown_test_workspace
+}
+
+# Description: _test_rm normalizes a trailing slash on TEST_TMPDIR.
+# Without normalization the prefix check would look for "$TMPDIR//" and
+# falsely refuse legitimate paths under the sandbox.
+test_test_rm_handles_trailing_slash_in_tmpdir() {
+  setup_test_workspace
+  local target="$TEST_TMPDIR/disposable"
+  echo "delete me" > "$target"
+
+  # Append a trailing slash to TEST_TMPDIR. The target path stays slash-free.
+  TEST_TMPDIR="$TEST_TMPDIR/" _test_rm "$target"
+  if [[ -e "$target" ]]; then
+    echo "  FAIL: _test_rm refused a valid path because of trailing slash" >&2
+    teardown_test_workspace
+    return 1
+  fi
+  teardown_test_workspace
+}

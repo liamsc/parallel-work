@@ -74,10 +74,22 @@ assert_status_fail() {
 #   - non-absolute path (relative paths resolve via $PWD — too risky)
 #   - path is exactly "/" (belt-and-suspenders for the worst case)
 #   - path contains ".." (defends against relative-path bypass)
+#   - path contains a newline or carriage return (defends against weird
+#     shell-quoting bugs that splice extra arguments into "$path")
 #   - TEST_TMPDIR is unset
 #   - TEST_TMPDIR is non-absolute
 #   - TEST_TMPDIR is suspiciously short (< 16 chars: rules out "/", "/tmp")
+#   - TEST_TMPDIR is on a hardcoded denylist of system directories or
+#     equals $HOME — the marker check would already refuse most of these,
+#     but the explicit denylist gives a readable error and adds a layer
+#     against marker-check bypass (e.g. user happened to drop the marker
+#     in their home for some reason)
 #   - TEST_TMPDIR doesn't actually exist as a directory
+#   - TEST_TMPDIR is a symlink — mktemp -d creates real directories, so
+#     a symlinked TEST_TMPDIR is either user error or hostile. Without
+#     this check, TEST_TMPDIR=/tmp/imposter -> /Users/me would pass the
+#     marker check (it follows the link) and rm -rf would delete real
+#     user files via the link
 #   - TEST_TMPDIR is missing the sandbox-marker file (i.e., wasn't
 #     created by setup_test_workspace — could be the user's home dir)
 #   - path isn't TEST_TMPDIR itself or strictly under it (string check)
@@ -85,7 +97,21 @@ assert_status_fail() {
 #     TEST_TMPDIR — blocks symlink-traversal: if an intermediate dir in
 #     $path is a symlink to /Users/me, the string check passes but
 #     `rm -rf` would follow the link and delete the target
+#
+# A trailing slash on TEST_TMPDIR (e.g. /tmp/foo/) is normalized away so
+# the prefix check doesn't falsely refuse paths inside it (without this,
+# the prefix would be "/tmp/foo//" and "/tmp/foo/bar" wouldn't match).
 _TEST_SANDBOX_MARKER='.parallel-work-test-sandbox'
+
+# Well-known absolute paths that must never be TEST_TMPDIR. The < 16 char
+# length floor already rules out most of these; the explicit list adds
+# (a) clearer errors and (b) coverage for longer paths the length check
+# would miss (notably $HOME). Exact match — subpaths like /var/folders/...
+# are still allowed because real mktemp output lives under them.
+_TEST_RM_TMPDIR_DENYLIST=(
+  / /bin /sbin /usr /lib /opt /etc /var /private /dev /proc /sys
+  /home /Users /root /boot /tmp /System /Library /Applications
+)
 
 _test_rm() {
   local path="$1"
@@ -110,6 +136,14 @@ _test_rm() {
   case "$path" in
     *..*) echo "_test_rm refused: path contains '..': $path" >&2; return 1 ;;
   esac
+  # $'\n' / $'\r' — bash ANSI-C quoting for a literal newline / carriage
+  # return. Catches malformed paths that could trip up tools downstream
+  # which read only the first line.
+  case "$path" in
+    *$'\n'*|*$'\r'*)
+      echo "_test_rm refused: path contains a newline or carriage return" >&2
+      return 1 ;;
+  esac
 
   # ── TEST_TMPDIR sanity ─────────────────────────────────────
   if [[ -z "${TEST_TMPDIR:-}" ]]; then
@@ -120,32 +154,58 @@ _test_rm() {
     echo "_test_rm refused: TEST_TMPDIR is not absolute: $TEST_TMPDIR" >&2
     return 1
   fi
+  # ${TEST_TMPDIR%/} — bash parameter expansion that strips a single
+  # trailing "/" if present. Normalizes "/tmp/foo/" to "/tmp/foo" so the
+  # prefix check below doesn't end up looking for "/tmp/foo//" (which no
+  # real path inside the sandbox would match).
+  local tmpdir="${TEST_TMPDIR%/}"
+  # Hardcoded denylist + explicit $HOME check. Most short denylist entries
+  # are also caught by the length floor below — keeping them explicit gives
+  # a more useful error and protects against marker-check bypass. $HOME is
+  # long enough to slip past the length check, so this is the one entry
+  # that adds genuinely new coverage rather than defense-in-depth.
+  local denied
+  for denied in "${_TEST_RM_TMPDIR_DENYLIST[@]}" "${HOME:-/dev/null/never-matches}"; do
+    if [[ "$tmpdir" == "$denied" ]]; then
+      echo "_test_rm refused: TEST_TMPDIR is a known-dangerous path: $tmpdir" >&2
+      return 1
+    fi
+  done
   # Real mktemp -d results are 20+ chars on macOS (/var/folders/...) and
   # ~20 chars on Linux (/tmp/tmp.XXXXXX). Anything under 16 is suspicious
   # — for example "/" (1) or "/tmp" (4) — and would scope deletion far
   # too broadly. The threshold is generous to leave room for short tmp
   # roots while still catching obvious accidents.
-  if [[ "${#TEST_TMPDIR}" -lt 16 ]]; then
-    echo "_test_rm refused: TEST_TMPDIR suspiciously short (${#TEST_TMPDIR} chars): $TEST_TMPDIR" >&2
+  if [[ "${#tmpdir}" -lt 16 ]]; then
+    echo "_test_rm refused: TEST_TMPDIR suspiciously short (${#tmpdir} chars): $tmpdir" >&2
     return 1
   fi
   # Catches typos and stale state — e.g. if TEST_TMPDIR was already cleaned
   # up by an earlier teardown but the variable still holds the old path.
-  if [[ ! -d "$TEST_TMPDIR" ]]; then
-    echo "_test_rm refused: TEST_TMPDIR is not a directory: $TEST_TMPDIR" >&2
+  if [[ ! -d "$tmpdir" ]]; then
+    echo "_test_rm refused: TEST_TMPDIR is not a directory: $tmpdir" >&2
+    return 1
+  fi
+  # -L returns true when the path is a symbolic link. mktemp -d creates a
+  # real directory, so a symlinked TEST_TMPDIR is suspicious: if it points
+  # at /Users/me, the marker check would follow the link and pass (assuming
+  # a marker happens to live there), then rm -rf would delete real user
+  # files through the link. Refuse outright.
+  if [[ -L "$tmpdir" ]]; then
+    echo "_test_rm refused: TEST_TMPDIR is a symlink: $tmpdir" >&2
     return 1
   fi
   # Proof-of-ownership: the marker file is dropped by setup_test_workspace
   # right after mktemp. Without it, we can't tell apart a real test sandbox
   # from a directory the user happens to have at this path.
-  if [[ ! -f "$TEST_TMPDIR/$_TEST_SANDBOX_MARKER" ]]; then
-    echo "_test_rm refused: TEST_TMPDIR has no sandbox marker — not created by setup_test_workspace: $TEST_TMPDIR" >&2
+  if [[ ! -f "$tmpdir/$_TEST_SANDBOX_MARKER" ]]; then
+    echo "_test_rm refused: TEST_TMPDIR has no sandbox marker — not created by setup_test_workspace: $tmpdir" >&2
     return 1
   fi
 
   # ── Containment check (string-prefix) ──────────────────────
-  if [[ "$path" != "$TEST_TMPDIR" && "$path" != "$TEST_TMPDIR/"* ]]; then
-    echo "_test_rm refused: path outside TEST_TMPDIR: $path (TEST_TMPDIR=$TEST_TMPDIR)" >&2
+  if [[ "$path" != "$tmpdir" && "$path" != "$tmpdir/"* ]]; then
+    echo "_test_rm refused: path outside TEST_TMPDIR: $path (TEST_TMPDIR=$tmpdir)" >&2
     return 1
   fi
 
@@ -158,7 +218,7 @@ _test_rm() {
   if command -v realpath >/dev/null 2>&1; then
     local real_path real_tmpdir
     real_path="$(realpath "$path" 2>/dev/null || true)"
-    real_tmpdir="$(realpath "$TEST_TMPDIR" 2>/dev/null || true)"
+    real_tmpdir="$(realpath "$tmpdir" 2>/dev/null || true)"
     if [[ -n "$real_path" && -n "$real_tmpdir" ]]; then
       if [[ "$real_path" != "$real_tmpdir" && "$real_path" != "$real_tmpdir/"* ]]; then
         echo "_test_rm refused: canonical path escapes TEST_TMPDIR via symlink: $real_path (from $path)" >&2
